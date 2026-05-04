@@ -1,5 +1,4 @@
 picard::load_config()
-source(file.path("tests", "helper.R"))
 
 testthat::test_that("Univariate episodes pipeline produces expected output", {
   data_dir <- config_test$univariate_episodes$data_dir
