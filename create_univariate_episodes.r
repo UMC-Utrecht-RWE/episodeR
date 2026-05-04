@@ -18,6 +18,7 @@ picard::load_config()
 sql_dir <- file.path(config_t3$T3$root, config_t3$T3$sql_dir)
 function_dir <- file.path(config_t3$T3$root, config_t3$T3$functions)
 
+start_study_date <- config_values$start_study_date
 end_date_missing_inclusion <- min(
   config_values$end_study_date
 )
