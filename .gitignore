@@ -1,0 +1,12 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.DS_Store
+.vscode/
+logs/*
+*.txt
+*~$*
+
+data/D3_study_variables/*
+!data/D3_study_variables/.gitkeep
