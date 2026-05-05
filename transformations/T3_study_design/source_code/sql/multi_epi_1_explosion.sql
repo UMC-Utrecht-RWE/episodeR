@@ -9,7 +9,7 @@ CREATE TABLE dim_var AS (
         MS_FILTERED.value,
         ROW_NUMBER() OVER (ORDER BY MS_FILTERED.variable_id, MS_FILTERED.value ASC) AS int_var_id
     FROM (SELECT *
-						FROM 	/*STARTCHANGEME*/main.matching_variable_spells/*ENDCHANGEME*/ MS
+						FROM 	read_parquet({d3_univariate_episodes_path}) MS
 						INNER JOIN i_batch_persons ibp
 						 -- Filtering out the variables for a specific batch of people
 							ON MS.person_id = ibp.person_id) MS_FILTERED
@@ -26,7 +26,7 @@ CREATE TABLE new_variables_ids AS (
         MS_FILTERED.variable_start_spell,
         MS_FILTERED.variable_end_spell
     FROM (SELECT *
-						FROM 	/*STARTCHANGEME*/main.matching_variable_spells/*ENDCHANGEME*/ MS
+						FROM 	read_parquet({d3_univariate_episodes_path}) MS
 						INNER JOIN i_batch_persons ibp
 						 -- Filtering out the variables for a specific batch of people
 							ON MS.person_id = ibp.person_id) MS_FILTERED

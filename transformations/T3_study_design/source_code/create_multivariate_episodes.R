@@ -48,11 +48,11 @@ persons_in_spells[, batch := rep(1:ceiling(.N / batch_size), each = batch_size)[
 num_batches <- unique(persons_in_spells$batch)
 
 # Load SQL scripts once before the loop
-sql_explosion <- picard::load_sql_query(file.path(sql_dir, "multi_epi_1_explosion.sql"))
-sql_explosion <- gsub(
-  x           = sql_explosion,
-  pattern     = "/\\*STARTCHANGEME\\*/.*?/\\*ENDCHANGEME\\*/",
-  replacement = sprintf("read_parquet('%s')", d3_univariate_episodes_path)
+sql_explosion <- picard::load_sql_query(
+  file.path(sql_dir, "multi_epi_1_explosion.sql"),
+  params = list(
+    d3_univariate_episodes_path = sprintf("'%s'", d3_univariate_episodes_path)
+  )
 )
 sql_combine <- picard::load_sql_query(file.path(sql_dir, "multi_epi_2_combine.sql"))
 sql_mergestatus <- picard::load_sql_query(file.path(sql_dir, "multi_epi_3_mergestatus.sql"))
@@ -68,10 +68,10 @@ for (i_batch in num_batches) {
   DBI::dbWriteTable(con, "i_batch_persons", i_batch_persons, overwrite = TRUE)
 
   # Step 1: Explode spells to one row per person per variable per day
-  DBI::dbExecute(con, sql_explosion)
+  picard::execute_sql_file(sql = sql_explosion, conn = con)
 
   # Step 2: Combine daily values into multivariate status intervals
-  DBI::dbExecute(con, sql_combine)
+  picard::execute_sql_file(sql = sql_combine, conn = con)
 
   # Read back results from DuckDB to R
   i_matching_status <- data.table::as.data.table(DBI::dbReadTable(con, "matching_status"))
