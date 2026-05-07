@@ -1,92 +1,51 @@
-picard::load_config()
+library(testthat)
+library(yaml)
+library(arrow)
+repo_root <- testthat::test_path("..", "..")
+config_test <- read_yaml(file.path(repo_root, "configuration", "config_test.yaml"))
+config_t3 <- read_yaml(file.path(repo_root, "configuration", "config_T3.yaml"))
+source(file.path(repo_root, "univariate_episodes_pipeline.r"))
 
 testthat::test_that("Univariate episodes pipeline produces expected output", {
-  data_dir <- config_test$univariate_episodes$data_dir
+  data_dir <- file.path(repo_root, config_test$univariate_episodes$data_dir)
   start_study_date <- config_test$univariate_episodes$start_study_date
   end_study_date <- config_test$univariate_episodes$end_study_date
   end_date_missing_inclusion <- end_study_date
 
   testthat::expect_true(file.exists(file.path(data_dir, "D3_CONCEPTS.csv")))
-  testthat::expect_true(file.exists(file.path(data_dir, "D3_SPELLS.csv")))
   testthat::expect_true(file.exists(file.path(data_dir, "study_variables.csv")))
 
-  sql_dir <- file.path(config_t3$T3$root, config_t3$T3$sql_dir)
+  sql_dir <- file.path(repo_root, config_t3$T3$root, config_t3$T3$sql_dir)
 
   sv_meta <- data.table::fread(file.path(data_dir, "study_variables.csv"))
   sv_meta$start_look_back <- abs(as.integer(sv_meta$start_look_back))
   sv_meta$end_look_back <- abs(as.integer(sv_meta$end_look_back))
-  concept_ids <- unique(sv_meta$concept_id)
+  sv_meta[, batch := FALSE]
 
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  hive_dir <- file.path(tempdir(), "univariate_episodes_hive")
+  unlink(hive_dir, recursive = TRUE, force = TRUE)
+  on.exit(unlink(hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
+  D3_SPELLS <- data.table::fread(file.path(data_dir, "D3_SPELLS.csv"))
   DBI::dbWriteTable(con, "D3_CONCEPTS", data.table::fread(file.path(data_dir, "D3_CONCEPTS.csv")), overwrite = TRUE)
-  DBI::dbWriteTable(con, "D3_SPELLS", data.table::fread(file.path(data_dir, "D3_SPELLS.csv")), overwrite = TRUE)
-  DBI::dbWriteTable(con, "study_variables", as.data.frame(sv_meta), overwrite = TRUE)
-  DBI::dbExecute(con, "CREATE VIEW all_persons AS SELECT DISTINCT person_id FROM D3_SPELLS")
 
-  # Step 1: Generate initial spells
-  picard::execute_sql_file(
-    sql = picard::load_sql_query(
-      file.path(sql_dir, "uni_epi_1_generate_initial_spells.sql"),
-      params = list(
-        concept_id_list  = paste(sprintf("'%s'", concept_ids), collapse = ", "),
-        start_study_date = sprintf("'%s'", start_study_date),
-        end_study_date   = sprintf("'%s'", end_date_missing_inclusion)
-      )
-    ),
-    conn = con
-  )
-
-  # Step 2: Fill gaps between/before/after known spells
-  picard::execute_sql_file(
-    sql = picard::load_sql_query(
-      file.path(sql_dir, "uni_epi_2_fill_gap_spells.sql"),
-      params = list(
-        start_study_date = sprintf("'%s'", start_study_date),
-        end_study_date   = sprintf("'%s'", end_date_missing_inclusion)
-      )
-    ),
-    conn = con
-  )
-
-  # Step 3: Add full-period missing spells for persons with no concept data
-  list_sv <- unique(sv_meta$variable_id)
-  DBI::dbWriteTable(con, "list_sv", data.frame(variable_id = list_sv), overwrite = TRUE)
-  picard::execute_sql_file(
-    sql = picard::load_sql_query(
-      file.path(sql_dir, "uni_epi_3_add_missing_persons.sql"),
-      params = list(
-        start_study_date = sprintf("'%s'", start_study_date),
-        end_study_date   = sprintf("'%s'", end_date_missing_inclusion)
-      )
-    ),
-    conn = con
-  )
-
-  # Step 4: Clip spells to study period
-  picard::execute_sql_file(
-    sql = picard::load_sql_query(
-      file.path(sql_dir, "uni_epi_4_trim_to_study_period.sql"),
-      params = list(
-        start_study_date = sprintf("'%s'", start_study_date),
-        end_study_date   = sprintf("'%s'", end_date_missing_inclusion)
-      )
-    ),
-    conn = con
-  )
-
-  # Step 5: Chain-merge same-value adjacent/overlapping intervals
-  picard::execute_sql_file(
-    sql = picard::load_sql_query(
-      file.path(sql_dir, "uni_epi_5_chain_merge_episodes.sql")
-    ),
-    conn = con
+  univariate_episodes_pipeline(
+    study_variables = sv_meta,
+    con = con,
+    person_ids = unique(D3_SPELLS$person_id),
+    sql_dir = sql_dir,
+    start_study_date = start_study_date,
+    end_date_missing_inclusion = end_date_missing_inclusion,
+    output_hive_path = hive_dir,
+    batch_size = 100,
+    batch_column = "batch"
   )
 
   # Retrieve and compare to expected output
   actual <- data.table::as.data.table(
-    DBI::dbGetQuery(con, "SELECT * FROM D3_UNIVARIATE_EPISODES")
+    DBI::dbGetQuery(con, sprintf("SELECT person_id, variable_id, value, spell_start, spell_end FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)", hive_dir))
   )
   actual[, spell_start := as.Date(spell_start)]
   actual[, spell_end := as.Date(spell_end)]
@@ -99,4 +58,29 @@ testthat::test_that("Univariate episodes pipeline produces expected output", {
   data.table::setcolorder(actual, names(expected))
 
   testthat::expect_equal(actual, expected)
+})
+
+testthat::test_that("univariate_episodes_pipeline errors when batch column is missing", {
+  data_dir <- file.path(repo_root, config_test$univariate_episodes$data_dir)
+  sql_dir <- file.path(repo_root, config_t3$T3$root, config_t3$T3$sql_dir)
+
+  sv_meta <- data.table::fread(file.path(data_dir, "study_variables.csv"))
+  sv_meta$start_look_back <- abs(as.integer(sv_meta$start_look_back))
+  sv_meta$end_look_back <- abs(as.integer(sv_meta$end_look_back))
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  DBI::dbWriteTable(con, "D3_CONCEPTS", data.table::fread(file.path(data_dir, "D3_CONCEPTS.csv")), overwrite = TRUE)
+
+  testthat::expect_error(
+    univariate_episodes_pipeline(
+      study_variables = sv_meta,
+      con = con,
+      sql_dir = sql_dir,
+      start_study_date = config_test$univariate_episodes$start_study_date,
+      end_date_missing_inclusion = config_test$univariate_episodes$end_study_date,
+      output_hive_path = file.path(tempdir(), "univariate_episodes_hive_missing_batch")
+    ),
+    "must include a Boolean"
+  )
 })
