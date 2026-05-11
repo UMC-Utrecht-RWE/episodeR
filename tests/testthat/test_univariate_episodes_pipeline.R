@@ -2,7 +2,7 @@ library(testthat)
 library(yaml)
 library(arrow)
 repo_root <- testthat::test_path("..", "..")
-config_test <- read_yaml(file.path(repo_root, "configuration", "config_test.yaml"))
+config_test <- read_yaml(file.path("configuration", "config_test.yaml"))
 config_t3 <- read_yaml(file.path(repo_root, "configuration", "config_T3.yaml"))
 source(file.path(repo_root, "univariate_episodes_pipeline.r"))
 
