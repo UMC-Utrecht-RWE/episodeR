@@ -93,12 +93,12 @@ DBI::dbExecute(con, sprintf(
 univariate_episodes_pipeline(
   study_variables = sv_meta,
   con = con,
-  population_table = "D3_SPELLS",
   sql_dir = sql_dir,
+  spells_table = "D3_SPELLS",
   start_study_date = start_study_date,
   end_date_missing_inclusion = end_date_missing_inclusion,
   output_hive_path = file.path(config_project$outputs$dir_d3, "D3_UNIVARIATE_EPISODES_HIVE"),
-  batch_size = 100, # config_project$create_univariate_episodes$batch_size,
+  batch_size = 1000, # config_project$create_univariate_episodes$batch_size,
   batch_column = "batch"
 )
 
