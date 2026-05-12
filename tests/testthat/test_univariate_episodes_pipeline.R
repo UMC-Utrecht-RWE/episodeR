@@ -52,7 +52,6 @@ testthat::test_that("Univariate episodes pipeline produces expected output", {
   expected <- data.table::fread(file.path(data_dir, "D3_UNIVARIATE_EPISODES.csv"))
   expected[, spell_start := as.Date(spell_start)]
   expected[, spell_end := as.Date(spell_end)]
-  expected[, value := as.character(value)] # Ensure value is character for comparison, adjust if expected is numeric
   data.table::setorder(expected, person_id, variable_id, spell_start)
   data.table::setcolorder(actual, names(expected))
 
