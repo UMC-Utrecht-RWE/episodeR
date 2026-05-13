@@ -1,13 +1,11 @@
 library(testthat)
 library(yaml)
-library(arrow)
-repo_root <- testthat::test_path("..", "..")
 config_test <- read_yaml(file.path("configuration", "config_test.yaml"))
-config_t3 <- read_yaml(file.path(repo_root, "configuration", "config_T3.yaml"))
-source(file.path(repo_root, "univariate_episodes_pipeline.r"))
+config_t3 <- read_yaml(file.path("configuration", "config_T3.yaml"))
+source(file.path("univariate_episodes_pipeline.r"))
 
 testthat::test_that("Univariate episodes pipeline produces expected output", {
-  data_dir <- file.path(repo_root, config_test$univariate_episodes$data_dir)
+  data_dir <- config_test$univariate_episodes$data_dir
   start_study_date <- config_test$univariate_episodes$start_study_date
   end_study_date <- config_test$univariate_episodes$end_study_date
   end_date_missing_inclusion <- end_study_date
@@ -15,7 +13,7 @@ testthat::test_that("Univariate episodes pipeline produces expected output", {
   testthat::expect_true(file.exists(file.path(data_dir, "D3_CONCEPTS.csv")))
   testthat::expect_true(file.exists(file.path(data_dir, "study_variables.csv")))
 
-  sql_dir <- file.path(repo_root, config_t3$T3$root, config_t3$T3$sql_dir)
+  sql_dir <- file.path(config_t3$T3$root, config_t3$T3$sql_dir)
 
   sv_meta <- data.table::fread(file.path(data_dir, "study_variables.csv"))
   sv_meta$start_look_back <- abs(as.integer(sv_meta$start_look_back))
@@ -61,8 +59,8 @@ testthat::test_that("Univariate episodes pipeline produces expected output", {
 })
 
 testthat::test_that("univariate_episodes_pipeline errors when batch column is missing", {
-  data_dir <- file.path(repo_root, config_test$univariate_episodes$data_dir)
-  sql_dir <- file.path(repo_root, config_t3$T3$root, config_t3$T3$sql_dir)
+  data_dir <- file.path(config_test$univariate_episodes$data_dir)
+  sql_dir <- file.path(config_t3$T3$root, config_t3$T3$sql_dir)
 
   sv_meta <- data.table::fread(file.path(data_dir, "study_variables.csv"))
   sv_meta$start_look_back <- abs(as.integer(sv_meta$start_look_back))
