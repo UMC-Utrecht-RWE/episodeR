@@ -10,7 +10,7 @@ INNER JOIN main.matching_status_coded t1 ON (
     NOT EXISTS (
         SELECT 1 
         FROM main.matching_status_coded t2 
-        WHERE t1.matching_status_end >= t2.matching_status_start - 1 
+        WHERE t1.matching_status_end >= t2.matching_status_start - INTERVAL '1 day'
           AND t1.matching_status_end < t2.matching_status_end 
           AND t1.person_id = t2.person_id 
           AND t1.dic_index = t2.dic_index
@@ -22,7 +22,7 @@ WHERE NOT EXISTS (
     SELECT 1 
     FROM main.matching_status_coded s2 
     WHERE s1.matching_status_start > s2.matching_status_start 
-      AND s1.matching_status_start <= s2.matching_status_end + 1 
+      AND s1.matching_status_start <= s2.matching_status_end + INTERVAL '1 day'
       AND s1.person_id = s2.person_id AND
       s1.dic_index = s2.dic_index
 )

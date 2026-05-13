@@ -23,8 +23,8 @@ CREATE TABLE new_variables_ids AS (
     SELECT
         MS_FILTERED.person_id,
         L.int_var_id,
-        MS_FILTERED.variable_start_spell,
-        MS_FILTERED.variable_end_spell
+        MS_FILTERED.spell_start,
+        MS_FILTERED.spell_end
     FROM (SELECT *
 						FROM 	read_parquet({d3_univariate_episodes_path}) MS
 						INNER JOIN i_batch_persons ibp
@@ -46,7 +46,7 @@ CREATE TABLE EXPLODED AS 	(
 								INNER JOIN dim_date DD
 									-- Add the date dimension
 									-- This is going to be a huge explosion, but that's what I want
-									ON DD.dates BETWEEN V.variable_start_spell AND V.variable_end_spell 
+									ON DD.dates BETWEEN V.spell_start AND V.spell_end 
 									
 								ORDER BY
 									V.person_id ASC
