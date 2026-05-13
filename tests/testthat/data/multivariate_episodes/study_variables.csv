@@ -1,0 +1,3 @@
+variable_id,concept_id,start_look_back,end_look_back,missing_set_to
+VAR_A,CONCEPT_A,0,0,
+VAR_B,CONCEPT_B,0,0,
