@@ -84,21 +84,21 @@ DBI::dbExecute(con, sprintf(
   concept_id_filter
 ))
 
-
-person_ids <- DBI::dbGetQuery(con, sprintf(
-  "SELECT DISTINCT person_id FROM read_parquet('%s')",
+# D3_SPELLS: read directly from single parquet file
+DBI::dbExecute(con, sprintf(
+  "CREATE OR REPLACE VIEW D3_SPELLS AS SELECT * FROM read_parquet('%s')",
   config_project$create_univariate_episodes$d3_spells
-))$person_id
+))
 
 univariate_episodes_pipeline(
   study_variables = sv_meta,
   con = con,
-  person_ids = person_ids,
+  population_table = "D3_SPELLS",
   sql_dir = sql_dir,
   start_study_date = start_study_date,
   end_date_missing_inclusion = end_date_missing_inclusion,
   output_hive_path = file.path(config_project$outputs$dir_d3, "D3_UNIVARIATE_EPISODES_HIVE"),
-  batch_size = 1000, # config_project$create_univariate_episodes$batch_size,
+  batch_size = 100, # config_project$create_univariate_episodes$batch_size,
   batch_column = "batch"
 )
 

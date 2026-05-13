@@ -155,8 +155,7 @@ univariate_episodes_pipeline <- function(
     person_filter_query <- sprintf("SELECT DISTINCT person_id FROM %s", concepts_table)
   }
 
-  run_univariate_pipeline(
-    sv_non_batch,
+  run_univariate_pipeline(sv_non_batch,
     person_filter_query = person_filter_query,
     output_hive_path
   )
@@ -168,17 +167,15 @@ univariate_episodes_pipeline <- function(
       if (is.null(person_ids)) {
         all_persons_query <- sprintf("SELECT DISTINCT person_id FROM %s", concepts_table)
         person_ids <- DBI::dbGetQuery(con, all_persons_query)$person_id
+        print("List of person_ids retrieved from concepts table for batching")
       }
       batch_ids <- split(person_ids, ceiling(seq_along(person_ids) / batch_size))
-      for (i_batch in seq_along(batch_ids)) {
-        logger::log_info("Processing batch number {i_batch} of {length(batch_ids)}")
-        ids <- batch_ids[[i_batch]]
+      for (ids in batch_ids) {
         ids_df <- data.frame(person_id = ids, stringsAsFactors = FALSE)
         DBI::dbWriteTable(con, "batch_person_ids", ids_df, overwrite = TRUE)
         run_univariate_pipeline(
           sv_subset = sv_batch,
-          person_filter_query = "SELECT person_id FROM batch_person_ids",
-          output_hive_path
+          person_filter_query = "SELECT person_id FROM batch_person_ids"
         )
       }
     }
