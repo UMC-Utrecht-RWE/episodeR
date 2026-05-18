@@ -1,16 +1,16 @@
--- Step 4: Clip spells_complete to [start_study_date, end_study_date] in place (v2 cleanOutsidePeriod)
+-- Step 4: Clip episodes_complete to [start_study_date, end_study_date] in place (v2 cleanOutsidePeriod)
 -- Removes rows that don't overlap the study period at all,
--- then clamps spell_start/spell_end of remaining rows to the study boundaries.
--- Input/output: spells_complete (modified in place)
+-- then clamps start/end of remaining rows to the study boundaries.
+-- Input/output: episodes_complete (modified in place)
 
-DELETE FROM spells_complete
+DELETE FROM episodes_complete
 WHERE NOT (
-  spell_start BETWEEN {start_study_date} AND {end_study_date}
-  OR spell_end   BETWEEN {start_study_date} AND {end_study_date}
-  OR (spell_start <= {start_study_date} AND spell_end >= {end_study_date})
+  start_episode BETWEEN {start_study_date} AND {end_study_date}
+  OR end_episode   BETWEEN {start_study_date} AND {end_study_date}
+  OR (start_episode <= {start_study_date} AND end_episode >= {end_study_date})
 );
 
-UPDATE spells_complete
+UPDATE episodes_complete
 SET
-  spell_start = CASE WHEN spell_start < {start_study_date} THEN {start_study_date} ELSE spell_start END,
-  spell_end   = CASE WHEN spell_end   > {end_study_date}   THEN {end_study_date}   ELSE spell_end   END;
+  start_episode = CASE WHEN start_episode < {start_study_date} THEN {start_study_date} ELSE start_episode END,
+  end_episode   = CASE WHEN end_episode   > {end_study_date}   THEN {end_study_date}   ELSE end_episode   END;

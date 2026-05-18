@@ -63,8 +63,8 @@ multivariate_episodes_pipeline <- function(
   DBI::dbExecute(con, sprintf(
     "CREATE OR REPLACE TABLE dim_date AS
      SELECT unnest(generate_series(
-       MIN(spell_start)::DATE,
-       MAX(spell_end)::DATE,
+       MIN(start_episode)::DATE,
+       MAX(end_episode)::DATE,
        INTERVAL '1 day'
      )) AS dates
      FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)",
@@ -102,21 +102,16 @@ multivariate_episodes_pipeline <- function(
     # Step 2: Combine daily values into multivariate status intervals
     picard::execute_sql_file(sql = sql_combine, conn = con)
 
-    i_matching_status <- data.table::as.data.table(DBI::dbReadTable(con, "matching_status"))
-    data.table::setnames(
-      i_matching_status,
-      c("start_date", "end_date"),
-      c("matching_status_start", "matching_status_end")
-    )
+    i_multivariate_episode <- data.table::as.data.table(DBI::dbReadTable(con, "multivariate_episode"))
     dim_var <- data.table::as.data.table(DBI::dbReadTable(con, "dim_var"))
 
     # Unpack combination strings -> one row per variable per episode
-    i_status_split <- i_matching_status[,
+    i_status_split <- i_multivariate_episode[,
       .(combination = unlist(strsplit(as.character(combination), ";"))),
-      by = .(person_id, matching_status_start, matching_status_end)
+      by = .(person_id, start_episode, end_episode)
     ]
     i_status_split[, combination := as.integer(combination)]
-    rm(i_matching_status)
+    rm(i_multivariate_episode)
 
     # Pivot to wide format (person x episode x variable)
     i_status_boolmat <- i_status_split[
@@ -125,14 +120,14 @@ multivariate_episodes_pipeline <- function(
     ]
     i_status_boolmat <- data.table::dcast(
       i_status_boolmat,
-      person_id + matching_status_start + matching_status_end ~ variable_id,
+      person_id + start_episode + end_episode ~ variable_id,
       value.var = "value",
       fill      = FALSE
     )
 
     # Build compact combination dictionary and encode episodes by index
     variables_cols <- names(i_status_boolmat)[
-      !names(i_status_boolmat) %in% c("person_id", "matching_status_start", "matching_status_end")
+      !names(i_status_boolmat) %in% c("person_id", "start_episode", "end_episode")
     ]
     dictionary <- unique(i_status_boolmat[, ..variables_cols])
     dictionary[, dic_index := .I]
@@ -141,7 +136,7 @@ multivariate_episodes_pipeline <- function(
       !(variables_cols),
       with = FALSE
     ]
-    DBI::dbWriteTable(con, "matching_status_coded", episodes_coded, overwrite = TRUE)
+    DBI::dbWriteTable(con, "multivariate_episode_coded", episodes_coded, overwrite = TRUE)
     rm(i_status_boolmat, episodes_coded)
 
     # Step 3: Merge adjacent identical-status intervals

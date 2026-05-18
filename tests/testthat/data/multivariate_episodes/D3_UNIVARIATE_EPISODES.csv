@@ -1,4 +1,4 @@
-person_id,variable_id,value,spell_start,spell_end
+person_id,variable_id,value,start_episode,end_episode
 P1,VAR_A,1,2024-01-01,2024-03-31
 P1,VAR_A,2,2024-04-01,2024-06-30
 P1,VAR_A,,2024-07-01,2024-12-31

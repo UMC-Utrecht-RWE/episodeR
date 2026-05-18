@@ -1,7 +1,7 @@
 
-DROP TABLE IF EXISTS matching_status;
+DROP TABLE IF EXISTS multivariate_episode;
 
-CREATE TABLE matching_status AS (
+CREATE TABLE multivariate_episode AS (
 
 WITH COMBINATIONS AS	(
 							SELECT 
@@ -46,11 +46,11 @@ WITH COMBINATIONS AS	(
 						)
 
 							SELECT
-								-- And make a nice begin and enddate for each spell
+								-- And make a nice begin and end date for each episode
 								P.person_id
 								, P.combination
-								, MIN(P.dates) AS start_date
-								, MAX(P.dates) AS end_date
+								, MIN(P.dates) AS start_episode
+								, MAX(P.dates) AS end_episode
 							FROM PERSONSEQ p
 							
 							GROUP BY

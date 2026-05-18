@@ -2,7 +2,7 @@ library(testthat)
 library(yaml)
 config_test <- read_yaml(file.path("configuration", "config_test.yaml"))
 config_t3 <- read_yaml(file.path("configuration", "config_T3.yaml"))
-source(file.path("univariate_episodes_pipeline.r"))
+source(file.path(config_t3$T3$root, config_t3$T3$functions, "univariate_episodes_pipeline.r"))
 
 testthat::test_that("Univariate episodes pipeline produces expected output", {
   data_dir <- config_test$univariate_episodes$data_dir
@@ -43,16 +43,16 @@ testthat::test_that("Univariate episodes pipeline produces expected output", {
 
   # Retrieve and compare to expected output
   actual <- data.table::as.data.table(
-    DBI::dbGetQuery(con, sprintf("SELECT person_id, variable_id, value, spell_start, spell_end FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)", hive_dir))
+    DBI::dbGetQuery(con, sprintf("SELECT person_id, variable_id, value, start_episode, end_episode FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)", hive_dir))
   )
-  actual[, spell_start := as.Date(spell_start)]
-  actual[, spell_end := as.Date(spell_end)]
-  data.table::setorder(actual, person_id, variable_id, spell_start)
+  actual[, start_episode := as.Date(start_episode)]
+  actual[, end_episode := as.Date(end_episode)]
+  data.table::setorder(actual, person_id, variable_id, start_episode)
 
   expected <- data.table::fread(file.path(data_dir, "D3_UNIVARIATE_EPISODES.csv"))
-  expected[, spell_start := as.Date(spell_start)]
-  expected[, spell_end := as.Date(spell_end)]
-  data.table::setorder(expected, person_id, variable_id, spell_start)
+  expected[, start_episode := as.Date(start_episode)]
+  expected[, end_episode := as.Date(end_episode)]
+  data.table::setorder(expected, person_id, variable_id, start_episode)
   data.table::setcolorder(actual, names(expected))
 
   testthat::expect_equal(actual, expected)

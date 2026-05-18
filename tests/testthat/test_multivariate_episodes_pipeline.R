@@ -2,7 +2,7 @@ library(testthat)
 library(yaml)
 config_test <- read_yaml(file.path("configuration", "config_test.yaml"))
 config_t3 <- read_yaml(file.path("configuration", "config_T3.yaml"))
-source(file.path("multivariate_episodes_pipeline.r"))
+source(file.path(config_t3$T3$root, config_t3$T3$functions, "multivariate_episodes_pipeline.r"))
 
 testthat::test_that("Multivariate episodes pipeline produces expected output", {
   data_dir <- config_test$multivariate_episodes$data_dir
@@ -24,8 +24,8 @@ testthat::test_that("Multivariate episodes pipeline produces expected output", {
 
   # Write univariate episodes CSV as hive-partitioned parquet
   uni_epi <- data.table::fread(file.path(data_dir, "D3_UNIVARIATE_EPISODES.csv"))
-  uni_epi[, spell_start := as.Date(spell_start)]
-  uni_epi[, spell_end := as.Date(spell_end)]
+  uni_epi[, start_episode := as.Date(start_episode)]
+  uni_epi[, end_episode := as.Date(end_episode)]
   DBI::dbWriteTable(con, "uni_epi_input", uni_epi, overwrite = TRUE)
   dir.create(uni_hive_dir, recursive = TRUE, showWarnings = FALSE)
   DBI::dbExecute(con, sprintf(
@@ -52,14 +52,14 @@ testthat::test_that("Multivariate episodes pipeline produces expected output", {
   actual <- data.table::as.data.table(
     DBI::dbGetQuery(con, sprintf("SELECT * FROM read_parquet('%s')", output_parquet))
   )
-  actual[, matching_status_start := as.Date(matching_status_start)]
-  actual[, matching_status_end := as.Date(matching_status_end)]
-  data.table::setorder(actual, person_id, matching_status_start)
+  actual[, start_episode := as.Date(start_episode)]
+  actual[, end_episode := as.Date(end_episode)]
+  data.table::setorder(actual, person_id, start_episode)
 
   expected <- data.table::fread(file.path(data_dir, "D3_MULTIVARIATE_EPISODES.csv"))
-  expected[, matching_status_start := as.Date(matching_status_start)]
-  expected[, matching_status_end := as.Date(matching_status_end)]
-  data.table::setorder(expected, person_id, matching_status_start)
+  expected[, start_episode := as.Date(start_episode)]
+  expected[, end_episode := as.Date(end_episode)]
+  data.table::setorder(expected, person_id, start_episode)
   data.table::setcolorder(actual, names(expected))
 
   testthat::expect_equal(actual, expected)
