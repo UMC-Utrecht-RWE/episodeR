@@ -12,7 +12,8 @@ data/D3_study_variables/*
 !data/D3_study_variables/.gitkeep
 
 configuration/*
-!configuration/.gitkeep
+!configuration/config_T3.yaml
+!configuration/config_test.yaml
 
 transformations/common_configuration/*
 !transformations/common_configuration/.gitkeep
