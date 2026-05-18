@@ -5,15 +5,6 @@ config_refs:
 helpers:
   - tests/helper.R
 
-child_pugh:
-  data_dir: tests/testthat/data/childpugh
-
-egfr_uacr:
-  data_dir: tests/testthat/data/egfr_uacr
-
-hemtransplant:
-  data_dir: tests/testthat/data/hemtransplant
-
 univariate_episodes:
   data_dir: tests/testthat/data/univariate_episodes
   start_study_date: "2024-09-01"
