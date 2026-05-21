@@ -22,6 +22,7 @@
 ##' @return Invisibly returns NULL; writes D3_MULTIVARIATE_EPISODES parquet
 ##' to output_path.
 #'
+#' @import data.table
 #' @export
 multivariate_episodes_pipeline <- function(
   study_variables,

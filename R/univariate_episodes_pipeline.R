@@ -28,6 +28,7 @@
 ##' @return Invisibly returns NULL; creates/replaces
 ##' D3_UNIVARIATE_EPISODES in con and writes parquet output to output_hive_path.
 #'
+#' @import data.table
 #' @export
 univariate_episodes_pipeline <- function(
   study_variables,
