@@ -27,17 +27,21 @@
 ##'
 ##' @return Invisibly returns NULL; creates/replaces
 ##' D3_UNIVARIATE_EPISODES in con and writes parquet output to output_hive_path.
+#'
+#' @import data.table
+#' @export
 univariate_episodes_pipeline <- function(
-    study_variables,
-    con,
-    person_ids = NULL,
-    concepts_table = "D3_CONCEPTS",
-    sql_dir,
-    start_study_date,
-    end_date_missing_inclusion,
-    output_hive_path,
-    batch_size = 5000L,
-    batch_column = "batch") {
+  study_variables,
+  con,
+  person_ids = NULL,
+  concepts_table = "D3_CONCEPTS",
+  sql_dir,
+  start_study_date,
+  end_date_missing_inclusion,
+  output_hive_path,
+  batch_size = 5000L,
+  batch_column = "batch"
+) {
   if (missing(output_hive_path) || !nzchar(output_hive_path)) {
     stop("output_hive_path must be provided and non-empty.")
   }
@@ -50,11 +54,17 @@ univariate_episodes_pipeline <- function(
     ))
   }
   if (concepts_table != "D3_CONCEPTS") {
-    concepts_table_sql <- as.character(DBI::dbQuoteIdentifier(con, concepts_table))
-    DBI::dbExecute(con, sprintf(
-      "CREATE OR REPLACE VIEW D3_CONCEPTS AS SELECT * FROM %s",
-      concepts_table_sql
+    concepts_table_sql <- as.character(DBI::dbQuoteIdentifier(
+      con,
+      concepts_table
     ))
+    DBI::dbExecute(
+      con,
+      sprintf(
+        "CREATE OR REPLACE VIEW D3_CONCEPTS AS SELECT * FROM %s",
+        concepts_table_sql
+      )
+    )
   }
   batch_values <- study_variables[[batch_column]]
   if (is.logical(batch_values)) {
@@ -62,7 +72,8 @@ univariate_episodes_pipeline <- function(
   } else {
     normalized <- tolower(trimws(as.character(batch_values)))
     use_batch <- normalized %in% c("true", "t", "1", "yes", "y")
-    invalid_batch_values <- !(normalized %in% c("true", "t", "1", "yes", "y", "false", "f", "0", "no", "n", "", "na"))
+    invalid_batch_values <- !(normalized %in%
+      c("true", "t", "1", "yes", "y", "false", "f", "0", "no", "n", "", "na"))
     if (any(invalid_batch_values, na.rm = TRUE)) {
       stop(sprintf(
         "Column '%s' must contain only Boolean-like values (TRUE/FALSE, 1/0, yes/no).",
@@ -79,9 +90,11 @@ univariate_episodes_pipeline <- function(
     start_study_date = sprintf("'%s'", as.character(start_study_date)),
     end_study_date = sprintf("'%s'", as.character(end_date_missing_inclusion))
   )
-  run_univariate_pipeline <- function(sv_subset,
-                                      person_filter_query,
-                                      output_hive_path) {
+  run_univariate_pipeline <- function(
+    sv_subset,
+    person_filter_query,
+    output_hive_path
+  ) {
     if (nrow(sv_subset) == 0) {
       return()
     }
@@ -93,15 +106,28 @@ univariate_episodes_pipeline <- function(
     }
 
     DBI::dbWriteTable(con, "study_variables", sv_subset, overwrite = TRUE)
-    DBI::dbWriteTable(con, "list_sv", data.frame(variable_id = unique(sv_subset$variable_id)), overwrite = TRUE)
+    DBI::dbWriteTable(
+      con,
+      "list_sv",
+      data.frame(variable_id = unique(sv_subset$variable_id)),
+      overwrite = TRUE
+    )
 
-    DBI::dbExecute(con, sprintf("CREATE OR REPLACE VIEW all_persons AS %s", person_filter_query))
+    DBI::dbExecute(
+      con,
+      sprintf("CREATE OR REPLACE VIEW all_persons AS %s", person_filter_query)
+    )
 
     picard::execute_sql_file(
       sql = picard::load_sql_query(
         file.path(sql_dir, "uni_epi_1_generate_initial_spells.sql"),
         params = c(
-          list(concept_id_list = paste(sprintf("'%s'", concept_ids), collapse = ", ")),
+          list(
+            concept_id_list = paste(
+              sprintf("'%s'", concept_ids),
+              collapse = ", "
+            )
+          ),
           params_common
         )
       ),
@@ -139,20 +165,32 @@ univariate_episodes_pipeline <- function(
       conn = con
     )
 
-    DBI::dbExecute(con, sprintf(
-      "COPY D3_UNIVARIATE_EPISODES TO '%s'
+    DBI::dbExecute(
+      con,
+      sprintf(
+        "COPY D3_UNIVARIATE_EPISODES TO '%s'
       (FORMAT PARQUET, PARTITION_BY (variable_id), APPEND TRUE);",
-      output_hive_path
-    ))
+        output_hive_path
+      )
+    )
   }
-
 
   if (!is.null(person_ids)) {
     table_person_ids <- data.table::data.table(person_id = person_ids)
-    DBI::dbWriteTable(con, "table_person_ids", table_person_ids, overwrite = TRUE)
-    person_filter_query <- sprintf("SELECT DISTINCT person_id FROM table_person_ids")
+    DBI::dbWriteTable(
+      con,
+      "table_person_ids",
+      table_person_ids,
+      overwrite = TRUE
+    )
+    person_filter_query <- sprintf(
+      "SELECT DISTINCT person_id FROM table_person_ids"
+    )
   } else {
-    person_filter_query <- sprintf("SELECT DISTINCT person_id FROM %s", concepts_table)
+    person_filter_query <- sprintf(
+      "SELECT DISTINCT person_id FROM %s",
+      concepts_table
+    )
   }
 
   run_univariate_pipeline(
@@ -166,12 +204,20 @@ univariate_episodes_pipeline <- function(
 
     if (total_persons > 0) {
       if (is.null(person_ids)) {
-        all_persons_query <- sprintf("SELECT DISTINCT person_id FROM %s", concepts_table)
+        all_persons_query <- sprintf(
+          "SELECT DISTINCT person_id FROM %s",
+          concepts_table
+        )
         person_ids <- DBI::dbGetQuery(con, all_persons_query)$person_id
       }
-      batch_ids <- split(person_ids, ceiling(seq_along(person_ids) / batch_size))
+      batch_ids <- split(
+        person_ids,
+        ceiling(seq_along(person_ids) / batch_size)
+      )
       for (i_batch in seq_along(batch_ids)) {
-        logger::log_info("Processing batch number {i_batch} of {length(batch_ids)}")
+        logger::log_info(
+          "Processing batch number {i_batch} of {length(batch_ids)}"
+        )
         ids <- batch_ids[[i_batch]]
         ids_df <- data.frame(person_id = ids, stringsAsFactors = FALSE)
         DBI::dbWriteTable(con, "batch_person_ids", ids_df, overwrite = TRUE)

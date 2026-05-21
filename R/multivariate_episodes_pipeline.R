@@ -21,15 +21,19 @@
 ##'
 ##' @return Invisibly returns NULL; writes D3_MULTIVARIATE_EPISODES parquet
 ##' to output_path.
+#'
+#' @import data.table
+#' @export
 multivariate_episodes_pipeline <- function(
-    study_variables,
-    con,
-    d3_univariate_episodes_path,
-    sql_dir,
-    output_path,
-    person_ids = NULL,
-    batch_size = 7000L,
-    batch_column = "batch") {
+  study_variables,
+  con,
+  d3_univariate_episodes_path,
+  sql_dir,
+  output_path,
+  person_ids = NULL,
+  batch_size = 7000L,
+  batch_column = "batch"
+) {
   if (missing(output_path) || !nzchar(output_path)) {
     stop("output_path must be provided and non-empty.")
   }
@@ -48,7 +52,8 @@ multivariate_episodes_pipeline <- function(
   } else {
     normalized <- tolower(trimws(as.character(batch_values)))
     use_batch <- normalized %in% c("true", "t", "1", "yes", "y")
-    invalid_batch_values <- !(normalized %in% c("true", "t", "1", "yes", "y", "false", "f", "0", "no", "n", "", "na"))
+    invalid_batch_values <- !(normalized %in%
+      c("true", "t", "1", "yes", "y", "false", "f", "0", "no", "n", "", "na"))
     if (any(invalid_batch_values, na.rm = TRUE)) {
       stop(sprintf(
         "Column '%s' must contain only Boolean-like values (TRUE/FALSE, 1/0, yes/no).",
@@ -60,38 +65,54 @@ multivariate_episodes_pipeline <- function(
   do_batch <- any(use_batch)
 
   # Build date dimension from full univariate episodes range
-  DBI::dbExecute(con, sprintf(
-    "CREATE OR REPLACE TABLE dim_date AS
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "CREATE OR REPLACE TABLE dim_date AS
      SELECT unnest(generate_series(
        MIN(start_episode)::DATE,
        MAX(end_episode)::DATE,
        INTERVAL '1 day'
      )) AS dates
      FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)",
-    d3_univariate_episodes_path
-  ))
+      d3_univariate_episodes_path
+    )
+  )
 
   # Load SQL scripts once before batching
-  uni_epi_param <- sprintf("'%s/**/*.parquet', hive_partitioning = TRUE", d3_univariate_episodes_path)
+  uni_epi_param <- sprintf(
+    "'%s/**/*.parquet', hive_partitioning = TRUE",
+    d3_univariate_episodes_path
+  )
   sql_explosion <- picard::load_sql_query(
     file.path(sql_dir, "multi_epi_1_explosion.sql"),
     params = list(d3_univariate_episodes_path = uni_epi_param)
   )
-  sql_combine <- picard::load_sql_query(file.path(sql_dir, "multi_epi_2_combine.sql"))
-  sql_mergestatus <- picard::load_sql_query(file.path(sql_dir, "multi_epi_3_mergestatus.sql"))
+  sql_combine <- picard::load_sql_query(file.path(
+    sql_dir,
+    "multi_epi_2_combine.sql"
+  ))
+  sql_mergestatus <- picard::load_sql_query(file.path(
+    sql_dir,
+    "multi_epi_3_mergestatus.sql"
+  ))
 
   # Resolve person_ids
   if (is.null(person_ids)) {
-    person_ids <- DBI::dbGetQuery(con, sprintf(
-      "SELECT DISTINCT person_id FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)",
-      d3_univariate_episodes_path
-    ))$person_id
+    person_ids <- DBI::dbGetQuery(
+      con,
+      sprintf(
+        "SELECT DISTINCT person_id FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)",
+        d3_univariate_episodes_path
+      )
+    )$person_id
     message("person_ids derived from D3_UNIVARIATE_EPISODES")
   }
 
   run_batch <- function(ids_subset) {
     DBI::dbWriteTable(
-      con, "i_batch_persons",
+      con,
+      "i_batch_persons",
       data.frame(person_id = ids_subset, stringsAsFactors = FALSE),
       overwrite = TRUE
     )
@@ -102,7 +123,10 @@ multivariate_episodes_pipeline <- function(
     # Step 2: Combine daily values into multivariate status intervals
     picard::execute_sql_file(sql = sql_combine, conn = con)
 
-    i_multivariate_episode <- data.table::as.data.table(DBI::dbReadTable(con, "multivariate_episode"))
+    i_multivariate_episode <- data.table::as.data.table(DBI::dbReadTable(
+      con,
+      "multivariate_episode"
+    ))
     dim_var <- data.table::as.data.table(DBI::dbReadTable(con, "dim_var"))
 
     # Unpack combination strings -> one row per variable per episode
@@ -116,18 +140,20 @@ multivariate_episodes_pipeline <- function(
     # Pivot to wide format (person x episode x variable)
     i_status_boolmat <- i_status_split[
       dim_var,
-      on = .(combination = int_var_id), nomatch = 0
+      on = .(combination = int_var_id),
+      nomatch = 0
     ]
     i_status_boolmat <- data.table::dcast(
       i_status_boolmat,
       person_id + start_episode + end_episode ~ variable_id,
       value.var = "value",
-      fill      = FALSE
+      fill = FALSE
     )
 
     # Build compact combination dictionary and encode episodes by index
     variables_cols <- names(i_status_boolmat)[
-      !names(i_status_boolmat) %in% c("person_id", "start_episode", "end_episode")
+      !names(i_status_boolmat) %in%
+        c("person_id", "start_episode", "end_episode")
     ]
     dictionary <- unique(i_status_boolmat[, ..variables_cols])
     dictionary[, dic_index := .I]
@@ -136,11 +162,19 @@ multivariate_episodes_pipeline <- function(
       !(variables_cols),
       with = FALSE
     ]
-    DBI::dbWriteTable(con, "multivariate_episode_coded", episodes_coded, overwrite = TRUE)
+    DBI::dbWriteTable(
+      con,
+      "multivariate_episode_coded",
+      episodes_coded,
+      overwrite = TRUE
+    )
     rm(i_status_boolmat, episodes_coded)
 
     # Step 3: Merge adjacent identical-status intervals
-    merged_coded <- data.table::as.data.table(DBI::dbGetQuery(con, sql_mergestatus))
+    merged_coded <- data.table::as.data.table(DBI::dbGetQuery(
+      con,
+      sql_mergestatus
+    ))
     merged_episodes <- merge(merged_coded, dictionary, by = "dic_index")[,
       !("dic_index"),
       with = FALSE
@@ -166,9 +200,17 @@ multivariate_episodes_pipeline <- function(
 
   logger::log_info("Batch processing complete")
 
-  DBI::dbWriteTable(con, "D3_MULTIVARIATE_EPISODES", multivariate_episodes, overwrite = TRUE)
-  DBI::dbExecute(con, sprintf(
-    "COPY D3_MULTIVARIATE_EPISODES TO '%s' (FORMAT 'parquet')",
-    output_path
-  ))
+  DBI::dbWriteTable(
+    con,
+    "D3_MULTIVARIATE_EPISODES",
+    multivariate_episodes,
+    overwrite = TRUE
+  )
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "COPY D3_MULTIVARIATE_EPISODES TO '%s' (FORMAT 'parquet')",
+      output_path
+    )
+  )
 }

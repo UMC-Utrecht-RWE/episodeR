@@ -1,11 +1,13 @@
 library(testthat)
 library(yaml)
-config_test <- read_yaml(file.path("configuration", "config_test.yaml"))
-config_t3 <- read_yaml(file.path("configuration", "config_T3.yaml"))
-source(file.path(config_t3$T3$root, config_t3$T3$functions, "univariate_episodes_pipeline.r"))
+library(data.table)
+
+config_test <- yaml::read_yaml(testthat::test_path("config_test.yaml"))
+config_t3 <- yaml::read_yaml(testthat::test_path("config_T3.yaml"))
 
 testthat::test_that("Univariate episodes pipeline produces expected output", {
-  data_dir <- config_test$univariate_episodes$data_dir
+  # data_dir <- config_test$univariate_episodes$data_dir
+  data_dir <- testthat::test_path("data", "univariate_episodes")
   start_study_date <- config_test$univariate_episodes$start_study_date
   end_study_date <- config_test$univariate_episodes$end_study_date
   end_date_missing_inclusion <- end_study_date
@@ -13,12 +15,12 @@ testthat::test_that("Univariate episodes pipeline produces expected output", {
   testthat::expect_true(file.exists(file.path(data_dir, "D3_CONCEPTS.csv")))
   testthat::expect_true(file.exists(file.path(data_dir, "study_variables.csv")))
 
-  sql_dir <- file.path(config_t3$T3$root, config_t3$T3$sql_dir)
+  sql_dir <- system.file(package = "episodeR", "sql/")
 
   sv_meta <- data.table::fread(file.path(data_dir, "study_variables.csv"))
   sv_meta$start_look_back <- abs(as.integer(sv_meta$start_look_back))
   sv_meta$end_look_back <- abs(as.integer(sv_meta$end_look_back))
-  sv_meta[, batch := FALSE]
+  sv_meta[, `:=`(batch, FALSE)]
 
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
@@ -27,7 +29,12 @@ testthat::test_that("Univariate episodes pipeline produces expected output", {
   on.exit(unlink(hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
   D3_SPELLS <- data.table::fread(file.path(data_dir, "D3_SPELLS.csv"))
-  DBI::dbWriteTable(con, "D3_CONCEPTS", data.table::fread(file.path(data_dir, "D3_CONCEPTS.csv")), overwrite = TRUE)
+  DBI::dbWriteTable(
+    con,
+    "D3_CONCEPTS",
+    data.table::fread(file.path(data_dir, "D3_CONCEPTS.csv")),
+    overwrite = TRUE
+  )
 
   univariate_episodes_pipeline(
     study_variables = sv_meta,
@@ -43,13 +50,22 @@ testthat::test_that("Univariate episodes pipeline produces expected output", {
 
   # Retrieve and compare to expected output
   actual <- data.table::as.data.table(
-    DBI::dbGetQuery(con, sprintf("SELECT person_id, variable_id, value, start_episode, end_episode FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)", hive_dir))
+    DBI::dbGetQuery(
+      con,
+      sprintf(
+        "SELECT person_id, variable_id, value, start_episode, end_episode FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)",
+        hive_dir
+      )
+    )
   )
   actual[, start_episode := as.Date(start_episode)]
   actual[, end_episode := as.Date(end_episode)]
   data.table::setorder(actual, person_id, variable_id, start_episode)
 
-  expected <- data.table::fread(file.path(data_dir, "D3_UNIVARIATE_EPISODES.csv"))
+  expected <- data.table::fread(file.path(
+    data_dir,
+    "D3_UNIVARIATE_EPISODES.csv"
+  ))
   expected[, start_episode := as.Date(start_episode)]
   expected[, end_episode := as.Date(end_episode)]
   data.table::setorder(expected, person_id, variable_id, start_episode)
@@ -59,8 +75,9 @@ testthat::test_that("Univariate episodes pipeline produces expected output", {
 })
 
 testthat::test_that("univariate_episodes_pipeline errors when batch column is missing", {
-  data_dir <- file.path(config_test$univariate_episodes$data_dir)
-  sql_dir <- file.path(config_t3$T3$root, config_t3$T3$sql_dir)
+  # data_dir <- file.path(config_test$univariate_episodes$data_dir)
+  data_dir <- testthat::test_path("data", "univariate_episodes")
+  sql_dir <- system.file(package = "episodeR", "sql/")
 
   sv_meta <- data.table::fread(file.path(data_dir, "study_variables.csv"))
   sv_meta$start_look_back <- abs(as.integer(sv_meta$start_look_back))
@@ -68,7 +85,12 @@ testthat::test_that("univariate_episodes_pipeline errors when batch column is mi
 
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
-  DBI::dbWriteTable(con, "D3_CONCEPTS", data.table::fread(file.path(data_dir, "D3_CONCEPTS.csv")), overwrite = TRUE)
+  DBI::dbWriteTable(
+    con,
+    "D3_CONCEPTS",
+    data.table::fread(file.path(data_dir, "D3_CONCEPTS.csv")),
+    overwrite = TRUE
+  )
 
   testthat::expect_error(
     univariate_episodes_pipeline(
@@ -77,7 +99,10 @@ testthat::test_that("univariate_episodes_pipeline errors when batch column is mi
       sql_dir = sql_dir,
       start_study_date = config_test$univariate_episodes$start_study_date,
       end_date_missing_inclusion = config_test$univariate_episodes$end_study_date,
-      output_hive_path = file.path(tempdir(), "univariate_episodes_hive_missing_batch")
+      output_hive_path = file.path(
+        tempdir(),
+        "univariate_episodes_hive_missing_batch"
+      )
     ),
     "must include a Boolean"
   )
