@@ -40,7 +40,7 @@ table/view. If different from D3_CONCEPTS, it is aliased as D3_CONCEPTS.}
 partitions will be written after each full 5-step pipeline execution.}
 
 \item{batch_size}{Optional numeric batch size for person-level batching.
-If NULL or invalid, defaults to 50000.}
+Defaults to 5000.}
 
 \item{batch_column}{Name of Boolean column in study_variables
 indicating whether each variable should be processed in batches.}
