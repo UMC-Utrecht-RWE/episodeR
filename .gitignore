@@ -17,3 +17,6 @@ configuration/*
 
 transformations/common_configuration/*
 !transformations/common_configuration/.gitkeep
+
+experimentation/
+
