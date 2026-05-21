@@ -13,4 +13,8 @@ Imports:
     data.table
 Suggests: 
     logger,
-    picard
+    picard,
+    testthat (>= 3.0.0),
+    yaml,
+    duckdb
+Config/testthat/edition: 3
