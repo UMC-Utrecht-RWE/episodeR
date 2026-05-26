@@ -24,6 +24,13 @@
 ##' If NULL or invalid, defaults to 50000.
 ##' @param batch_column Name of Boolean column in study_variables
 ##' indicating whether each variable should be processed in batches.
+##' @param missing_col Optional name of a column in study_variables whose
+##' values are used as the fill value for periods with no recorded concept
+##' (gap fills in step 2 and missing-person rows in step 3). The column is
+##' exposed to the SQL pipeline as \code{missing_set_to}.
+##' If \code{NULL} (default) the fill value is set to \code{NA} (NULL in
+##' DuckDB) for every variable. If a column name is given and that column
+##' is not present in \code{study_variables} an error is raised.
 ##'
 ##' @return Invisibly returns NULL; creates/replaces
 ##' D3_UNIVARIATE_EPISODES in con and writes parquet output to output_hive_path.
@@ -31,17 +38,17 @@
 #' @import data.table
 #' @export
 univariate_episodes_pipeline <- function(
-  study_variables,
-  con,
-  person_ids = NULL,
-  concepts_table = "D3_CONCEPTS",
-  sql_dir,
-  start_study_date,
-  end_date_missing_inclusion,
-  output_hive_path,
-  batch_size = 5000L,
-  batch_column = "batch"
-) {
+    study_variables,
+    con,
+    person_ids = NULL,
+    concepts_table = "D3_CONCEPTS",
+    sql_dir,
+    start_study_date,
+    end_date_missing_inclusion,
+    output_hive_path,
+    batch_size = 5000L,
+    batch_column = "batch",
+    missing_col = NULL) {
   if (missing(output_hive_path) || !nzchar(output_hive_path)) {
     stop("output_hive_path must be provided and non-empty.")
   }
@@ -52,6 +59,22 @@ univariate_episodes_pipeline <- function(
       "study_variables must include a Boolean '%s' column to control batching per variable.",
       batch_column
     ))
+  }
+
+  # Resolve missing_set_to column.
+  # If missing_col is NULL, fill with NA (becomes NULL in DuckDB).
+  # If missing_col is provided, copy that column to missing_set_to so the
+  # SQL pipeline always finds a column with that exact name.
+  if (is.null(missing_col)) {
+    study_variables$missing_set_to <- NA
+  } else {
+    if (!(missing_col %in% names(study_variables))) {
+      stop(sprintf(
+        "Column '%s' specified by missing_col was not found in study_variables.",
+        missing_col
+      ))
+    }
+    study_variables$missing_set_to <- study_variables[[missing_col]]
   }
   if (concepts_table != "D3_CONCEPTS") {
     concepts_table_sql <- as.character(DBI::dbQuoteIdentifier(
@@ -91,10 +114,9 @@ univariate_episodes_pipeline <- function(
     end_study_date = sprintf("'%s'", as.character(end_date_missing_inclusion))
   )
   run_univariate_pipeline <- function(
-    sv_subset,
-    person_filter_query,
-    output_hive_path
-  ) {
+      sv_subset,
+      person_filter_query,
+      output_hive_path) {
     if (nrow(sv_subset) == 0) {
       return()
     }
