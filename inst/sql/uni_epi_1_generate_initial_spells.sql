@@ -15,14 +15,14 @@ CREATE OR REPLACE TABLE concept_dedup AS
 SELECT
   c.person_id,
   c.concept_id,
-  c.date,
+  CAST(c.date AS DATE) AS date,
   CASE
     WHEN COUNT(DISTINCT c.value) > 1 THEN 'unknown'
     ELSE MAX(c.value)
   END AS value
 FROM D3_CONCEPTS c
 INNER JOIN all_persons p ON c.person_id = p.person_id
-GROUP BY c.person_id, c.concept_id, c.date;
+GROUP BY c.person_id, c.concept_id, date;
 
 CREATE OR REPLACE TABLE trimmed_episodes AS
 WITH
