@@ -18,6 +18,9 @@
 ##' @param batch_column Name of Boolean column in study_variables indicating
 ##' whether batching should be used. If any variable has batch=TRUE, all
 ##' persons are processed in batches.
+##' @param data_type_col Name of the column in study_variables that declares
+##' the target data type for each variable (e.g. BOOL, NUM, INT, CHAR, DATE).
+##' Defaults to "data_type". Set to NULL to skip type conversion.
 ##'
 ##' @return Invisibly returns NULL; writes D3_MULTIVARIATE_EPISODES parquet
 ##' to output_path.
@@ -25,15 +28,15 @@
 #' @import data.table
 #' @export
 multivariate_episodes_pipeline <- function(
-  study_variables,
-  con,
-  d3_univariate_episodes_path,
-  sql_dir,
-  output_path,
-  person_ids = NULL,
-  batch_size = 7000L,
-  batch_column = "batch"
-) {
+    study_variables,
+    con,
+    d3_univariate_episodes_path,
+    sql_dir,
+    output_path,
+    person_ids = NULL,
+    batch_size = 7000L,
+    batch_column = "batch",
+    data_type_col = "data_type") {
   if (missing(output_path) || !nzchar(output_path)) {
     stop("output_path must be provided and non-empty.")
   }
@@ -149,6 +152,13 @@ multivariate_episodes_pipeline <- function(
       value.var = "value",
       fill = FALSE
     )
+
+    # Convert variable columns to declared data types
+    if (!is.null(data_type_col) && data_type_col %in% names(study_variables)) {
+      i_status_boolmat <- apply_data_types(
+        i_status_boolmat, study_variables, data_type_col
+      )
+    }
 
     # Build compact combination dictionary and encode episodes by index
     variables_cols <- names(i_status_boolmat)[
