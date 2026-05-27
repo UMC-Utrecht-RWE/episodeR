@@ -1,4 +1,22 @@
-## Script logger ----
+################################################################
+# create_univariate_episodes ---
+# Aim:
+# Build D3_UNIVARIATE_EPISODES by running the episodeR univariate
+# episodes pipeline on study variables flagged with eligibility = TRUE.
+#
+# Input files: ---
+# - configuration/config_project.yaml
+# - configuration/config_values.yaml
+# - transformations/common_configuration/RWE-BRIDGE/study_variables.csv
+# - data/D3_study_variables/D3_CONCEPTS.duckdb
+# - data/D3_study_variables/D3_SPELLS.parquet
+#
+# Output: ---
+# - data/D3_study_variables/D3_UNIVARIATE_EPISODES_parquet/
+################################################################
+
+# Initial setup ---
+## Script logger ---
 if (
   !base::exists("lm", inherits = TRUE) ||
     !base::inherits(lm, "LoggerManager")
@@ -6,110 +24,89 @@ if (
   lm <- NULL
 }
 if (!base::is.null(lm)) {
-  lm$start_script("Processing D3 PERSONS")
-  # Start capturing print statements
+  lm$start_script("create_univariate_episodes")
   lm$start_capturing_prints()
 }
 
-logger::log_info("[Univariate Episodes] - STARTING")
+logger::log_info("[Univariate episodes] - START")
+logger::log_info("Start of the create_univariate_episodes script.")
 
-picard::load_config()
+## Config loading ---
+config_project <- picard::load_config("configuration/config_project.yaml")
+config_values <- picard::load_config("configuration/config_values.yaml")
+uv_config <- config_project$create_univariate_episodes
+dir_d3 <- config_project$outputs$dir_d3
 
-sql_dir <- file.path(config_t3$T3$root, config_t3$T3$sql_dir)
-function_dir <- file.path(config_t3$T3$root, config_t3$T3$functions)
-
-start_study_date <- config_values$start_study_date
-end_date_missing_inclusion <- min(
-  config_values$end_study_date
-)
-# , config_values$end_study_date_this_report
-
-# Load study_variables and map list_sv to concept_id
-study_variables <- picard::load(
-  file_path = config_pipeline$common$dir_bridge,
-  file_name = "study_variables.csv"
-)
-study_variables$start_look_back <- abs(as.integer(study_variables$start_look_back))
-study_variables$end_look_back <- abs(as.integer(study_variables$end_look_back))
-
-missing_possible <- picard::load(
-  file_path = config_pipeline$common$dir_bridge,
-  file_name = "matching_possible_missing.csv"
-)
-study_variables <- merge(study_variables, missing_possible[, .(variable_id, missing_set_to)],
-  by = "variable_id", all.x = TRUE
+## Audit setup ---
+picard::audit_start(
+  file_name = "create_univariate_episodes",
+  deap_name = config_project$DEAP_configuration$name
 )
 
+# Load study variables metadata ---
+logger::log_info("Loading study variables metadata from BRIDGE.")
+sv_meta <- data.table::fread(uv_config$study_variables)
 
-# Full list_sv for production
-list_sv <- c(
-  "COMP_IMMUNOCOMP_POP",
-  "COMP_RENALIMPAIRMENT_POP",
-  "COMP_HEPIMPAIRMENT_CHILDPUGH_POP",
-  "population_subgroup", # check codebook immunocompromised/renal_impairment/hepatic_impairment/none
-  "COD_HIST_ABRYSVO_VACC",
-  "COD_PREVENT_CARE_USE",
-  "ABRYSVO_VACC",
-  "CALENDARTIME_QUARTER", # on the date of ABRYSVO_VACC
-  "AGE_CAT_5Y", # D3_SPELLS/birth_date
-  "older60y", # D3_SPELLS/birth_date
-  "enrollment_12m", # D3_SPELLS/start_spell
-  "fup_1d" # D3_SPELLS/start_spell, D3_SPELLS/end_spell
+# Filter to eligibility == TRUE ---
+logger::log_info("Filtering study variables to eligibility == TRUE.")
+sv_meta <- sv_meta[eligibility == TRUE]
+logger::log_info(paste0("Number of study variables with eligibility = TRUE: ", nrow(sv_meta)))
+
+# Preprocess look-back columns (convert to non-negative integer) ---
+sv_meta[, start_look_back := abs(as.integer(start_look_back))]
+sv_meta[, end_look_back := abs(as.integer(end_look_back))]
+# TODO episodeR only deals with numeric lookback, but we have birth_date
+
+# Add batch column (no batching by default) ---
+sv_meta[, batch := FALSE]
+
+# Load D3_SPELLS to extract person_ids ---
+logger::log_info("Loading D3_SPELLS to extract person_ids.")
+D3_SPELLS <- picard::load(
+  file_path = dir_d3,
+  file_name = uv_config$d3_spells_file_name
 )
+person_ids <- unique(D3_SPELLS$person_id)
+logger::log_info(paste0("Number of unique person_ids: ", length(person_ids)))
 
-# For testing
-list_sv <- c(
-  "COD_HIST_ABRYSVO_VACC",
-  "COD_PREVENT_CARE_USE",
-  "ABRYSVO_VACC"
-)
-###########
-# TODO composites
-# check other PR developing for age, enrolment, etc.
-###########
-
-# Map variable_id to concept_id(s)
-sv_meta <- study_variables[study_variables$variable_id %in% list_sv, ]
-concept_ids <- unique(sv_meta$concept_id)
-sv_meta[, batch := TRUE] # for testing, assign all to one batch. In production, assign batches based on concept_id or variable_id to optimize processing
 con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
 
 # D3_CONCEPTS: read only required concept_id partitions from hive-partitioned parquet folder
+concept_ids <- unique(sv_meta$concept_id)
 concept_id_filter <- paste(sprintf("'%s'", concept_ids), collapse = ", ")
 DBI::dbExecute(con, sprintf(
   "CREATE OR REPLACE VIEW D3_CONCEPTS AS
-   SELECT * FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)
+   SELECT * FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE, union_by_name = TRUE)
    WHERE concept_id IN (%s)",
-  config_project$create_univariate_episodes$d3_concepts,
+  file.path(dir_d3, uv_config$d3_concepts),
   concept_id_filter
 ))
 
+# Resolve SQL directory from episodeR package ---
+sql_dir <- system.file("sql", package = "episodeR")
 
-person_ids <- DBI::dbGetQuery(con, sprintf(
-  "SELECT DISTINCT person_id FROM read_parquet('%s')",
-  config_project$create_univariate_episodes$d3_spells
-))$person_id
-
-univariate_episodes_pipeline(
+# Run the univariate episodes pipeline ---
+logger::log_info("Running episodeR::univariate_episodes_pipeline.")
+episodeR::univariate_episodes_pipeline(
   study_variables = sv_meta,
   con = con,
   person_ids = person_ids,
   sql_dir = sql_dir,
-  start_study_date = start_study_date,
-  end_date_missing_inclusion = end_date_missing_inclusion,
-  output_hive_path = file.path(config_project$outputs$dir_d3, "D3_UNIVARIATE_EPISODES_HIVE"),
-  batch_size = 1000, # config_project$create_univariate_episodes$batch_size,
-  batch_column = "batch"
+  start_study_date = config_values$start_study_date,
+  end_date_missing_inclusion = config_values$end_study_date,
+  output_hive_path = file.path(dir_d3, uv_config$output_hive_path),
+  batch_size = uv_config$batch_size,
+  batch_column = "batch",
+  missing_col = "missing_set_to"
 )
 
-logger::log_info(c("[Univariate Episodes] - SUCCEED"))
+logger::log_info("[Univariate episodes] - END")
 
+## Audit end ---
+picard::audit_end()
+
+## Script end ---
 if (!base::is.null(lm)) {
   lm$stop_capturing_prints()
   lm$end_script()
 }
-
-
-# issue with value in D3_concepts: DSP_ABRYSVO_VACC value is "ABRYSVO" instead of 0/1
-# PP_OTHER_VACC is not stored in D3_concepts, value is NULL for all
-# todo - composites
