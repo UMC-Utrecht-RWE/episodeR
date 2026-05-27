@@ -26,7 +26,6 @@
 ##'   use in pipelines).
 ##'
 ##' @import data.table
-##' @export
 apply_data_types <- function(dt, study_variables, data_type_col = "data_type") {
   type_map <- list(
     BOOL      = as.logical,
