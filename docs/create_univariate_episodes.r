@@ -8,7 +8,7 @@
 # - configuration/config_project.yaml
 # - configuration/config_values.yaml
 # - transformations/common_configuration/RWE-BRIDGE/study_variables.csv
-# - data/D3_study_variables/D3_CONCEPTS.duckdb
+# - data/D3_study_variables/D3_CONCEPTS_parquet (hive-partitioned parquet folder)
 # - data/D3_study_variables/D3_SPELLS.parquet
 #
 # Output: ---
@@ -24,7 +24,7 @@ if (
   lm <- NULL
 }
 if (!base::is.null(lm)) {
-  lm$start_script("create_univariate_episodes")
+  lm$start_script("Creating D3 Univariate Episodes")
   lm$start_capturing_prints()
 }
 
@@ -32,8 +32,7 @@ logger::log_info("[Univariate episodes] - START")
 logger::log_info("Start of the create_univariate_episodes script.")
 
 ## Config loading ---
-config_project <- picard::load_config("configuration/config_project.yaml")
-config_values <- picard::load_config("configuration/config_values.yaml")
+picard::load_config()
 uv_config <- config_project$create_univariate_episodes
 dir_d3 <- config_project$outputs$dir_d3
 
@@ -45,7 +44,7 @@ picard::audit_start(
 
 # Load study variables metadata ---
 logger::log_info("Loading study variables metadata from BRIDGE.")
-sv_meta <- data.table::fread(uv_config$study_variables)
+sv_meta <- data.table::fread(file.path(config_pipeline$common$dir_bridge, "study_variables.csv"))
 
 # Filter to eligibility == TRUE ---
 logger::log_info("Filtering study variables to eligibility == TRUE.")
