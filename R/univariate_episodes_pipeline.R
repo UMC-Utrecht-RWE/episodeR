@@ -67,6 +67,9 @@ univariate_episodes_pipeline <- function(
   # SQL pipeline always finds a column with that exact name.
   if (is.null(missing_col)) {
     study_variables$missing_set_to <- NA
+    logger::log_info(
+      "No missing_col provided - gap-filled periods will have NULL value in output."
+    )
   } else {
     if (!(missing_col %in% names(study_variables))) {
       stop(sprintf(
@@ -113,10 +116,9 @@ univariate_episodes_pipeline <- function(
     start_study_date = sprintf("'%s'", as.character(start_study_date)),
     end_study_date = sprintf("'%s'", as.character(end_date_missing_inclusion))
   )
-  run_univariate_pipeline <- function(
-      sv_subset,
-      person_filter_query,
-      output_hive_path) {
+  run_univariate_pipeline <- function(sv_subset,
+                                      person_filter_query,
+                                      output_hive_path) {
     if (nrow(sv_subset) == 0) {
       return()
     }

@@ -45,7 +45,8 @@ testthat::test_that("Univariate episodes pipeline produces expected output", {
     end_date_missing_inclusion = end_date_missing_inclusion,
     output_hive_path = hive_dir,
     batch_size = 100,
-    batch_column = "batch"
+    batch_column = "batch",
+    missing_col = "missing_set_to"
   )
 
   # Retrieve and compare to expected output

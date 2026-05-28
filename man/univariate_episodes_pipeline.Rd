@@ -14,7 +14,8 @@ univariate_episodes_pipeline(
   end_date_missing_inclusion,
   output_hive_path,
   batch_size = 5000L,
-  batch_column = "batch"
+  batch_column = "batch",
+  missing_col = NULL
 )
 }
 \arguments{
@@ -40,10 +41,18 @@ table/view. If different from D3_CONCEPTS, it is aliased as D3_CONCEPTS.}
 partitions will be written after each full 5-step pipeline execution.}
 
 \item{batch_size}{Optional numeric batch size for person-level batching.
-Defaults to 5000.}
+If NULL or invalid, defaults to 50000.}
 
 \item{batch_column}{Name of Boolean column in study_variables
 indicating whether each variable should be processed in batches.}
+
+\item{missing_col}{Optional name of a column in study_variables whose
+values are used as the fill value for periods with no recorded concept
+(gap fills in step 2 and missing-person rows in step 3). The column is
+exposed to the SQL pipeline as \code{missing_set_to}.
+If \code{NULL} (default) the fill value is set to \code{NA} (NULL in
+DuckDB) for every variable. If a column name is given and that column
+is not present in \code{study_variables} an error is raised.}
 }
 \value{
 Invisibly returns NULL; creates/replaces

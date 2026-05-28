@@ -12,7 +12,8 @@ multivariate_episodes_pipeline(
   output_path,
   person_ids = NULL,
   batch_size = 7000L,
-  batch_column = "batch"
+  batch_column = "batch",
+  data_type_col = "data_type"
 )
 }
 \arguments{
@@ -37,6 +38,10 @@ Defaults to 7000.}
 \item{batch_column}{Name of Boolean column in study_variables indicating
 whether batching should be used. If any variable has batch=TRUE, all
 persons are processed in batches.}
+
+\item{data_type_col}{Name of the column in study_variables that declares
+the target data type for each variable (e.g. BOOL, NUM, INT, CHAR, DATE).
+Defaults to "data_type". Set to NULL to skip type conversion.}
 }
 \value{
 Invisibly returns NULL; writes D3_MULTIVARIATE_EPISODES parquet
