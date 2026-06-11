@@ -219,7 +219,14 @@ multivariate_episodes_pipeline <- function(
   DBI::dbExecute(
     con,
     sprintf(
-      "COPY D3_MULTIVARIATE_EPISODES TO '%s' (FORMAT 'parquet')",
+      "COPY (
+        SELECT
+          person_id,
+          CAST(start_episode AS DATE) AS start_episode,
+          CAST(end_episode AS DATE) AS end_episode,
+          * EXCLUDE (person_id, start_episode, end_episode)
+        FROM D3_MULTIVARIATE_EPISODES
+      ) TO '%s' (FORMAT 'parquet')",
       output_path
     )
   )

@@ -66,6 +66,21 @@ testthat::test_that("Multivariate episodes pipeline produces expected output", {
     batch_column = "batch"
   )
 
+# check date schema, throw error if timestamp
+  output_schema <- arrow::read_parquet(
+    output_parquet,
+    as_data_frame = FALSE
+  )$schema
+  testthat::expect_equal(
+    output_schema$GetFieldByName("start_episode")$type$ToString(),
+    "date32[day]"
+  )
+  testthat::expect_equal(
+    output_schema$GetFieldByName("end_episode")$type$ToString(),
+    "date32[day]"
+  )
+
+# check values match expected
   actual <- data.table::as.data.table(
     DBI::dbGetQuery(
       con,

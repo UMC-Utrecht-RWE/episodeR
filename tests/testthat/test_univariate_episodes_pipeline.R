@@ -127,6 +127,7 @@ testthat::test_that("Univariate episodes pipeline trims concept timestamps to da
     missing_col = "missing_set_to"
   )
 
+# check date schema, throw error if timestamp
   parquet_files <- list.files(
     hive_dir,
     pattern = "\\.parquet$",
@@ -150,6 +151,7 @@ testthat::test_that("Univariate episodes pipeline trims concept timestamps to da
   testthat::expect_true(all(start_types == "date32[day]"))
   testthat::expect_true(all(end_types == "date32[day]"))
 
+# check values match expected
   actual <- data.table::as.data.table(
     DBI::dbGetQuery(
       con,
