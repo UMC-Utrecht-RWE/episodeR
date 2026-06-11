@@ -193,7 +193,7 @@ univariate_episodes_pipeline <- function(
       con,
       sprintf(
         "COPY D3_UNIVARIATE_EPISODES TO '%s'
-      (FORMAT PARQUET, PARTITION_BY (variable_id), APPEND TRUE);",
+        (FORMAT PARQUET, PARTITION_BY (variable_id), APPEND TRUE);",
         output_hive_path
       )
     )

@@ -103,7 +103,7 @@ testthat::test_that("Univariate episodes pipeline trims concept timestamps to da
 
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
-  hive_dir <- file.path(tempdir(), "univariate_episodes_hive_timestamps")
+  hive_dir <- file.path(data_dir, "univariate_episodes_hive_timestamps")
   unlink(hive_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
@@ -114,7 +114,7 @@ testthat::test_that("Univariate episodes pipeline trims concept timestamps to da
     overwrite = TRUE
   )
 
-  univariate_episodes_pipeline(
+  episodeR::univariate_episodes_pipeline(
     study_variables = sv_meta,
     con = con,
     person_ids = unique(D3_SPELLS$person_id),

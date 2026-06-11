@@ -5,12 +5,12 @@
 
 DELETE FROM episodes_complete
 WHERE NOT (
-  start_episode BETWEEN {start_study_date} AND {end_study_date}
-  OR end_episode   BETWEEN {start_study_date} AND {end_study_date}
-  OR (start_episode <= {start_study_date} AND end_episode >= {end_study_date})
+  start_episode BETWEEN DATE({start_study_date}) AND DATE({end_study_date})
+  OR end_episode   BETWEEN DATE({start_study_date}) AND DATE({end_study_date})
+  OR (start_episode <= DATE({start_study_date}) AND end_episode >= DATE({end_study_date}))
 );
 
 UPDATE episodes_complete
 SET
-  start_episode = CASE WHEN start_episode < {start_study_date} THEN {start_study_date} ELSE start_episode END,
-  end_episode   = CASE WHEN end_episode   > {end_study_date}   THEN {end_study_date}   ELSE end_episode   END;
+  start_episode = CASE WHEN start_episode < DATE({start_study_date}) THEN DATE({start_study_date}) ELSE start_episode END,
+  end_episode   = CASE WHEN end_episode   > DATE({end_study_date})   THEN DATE({end_study_date})   ELSE end_episode   END;
