@@ -12,17 +12,25 @@
 --   episodes_raw      → chain-merge same-value adjacent/overlapping trimmed intervals
 
 CREATE OR REPLACE TABLE concept_dedup AS
+WITH concepts_dated AS (
+  SELECT
+    c.person_id,
+    c.concept_id,
+    CAST(c.date AS DATE) AS date,
+    c.value
+  FROM D3_CONCEPTS c
+)
 SELECT
   c.person_id,
   c.concept_id,
-  CAST(c.date AS DATE) AS date,
+  c.date,
   CASE
     WHEN COUNT(DISTINCT c.value) > 1 THEN 'unknown'
     ELSE MAX(c.value)
   END AS value
-FROM D3_CONCEPTS c
+FROM concepts_dated c
 INNER JOIN all_persons p ON c.person_id = p.person_id
-GROUP BY c.person_id, c.concept_id, date;
+GROUP BY c.person_id, c.concept_id, c.date;
 
 CREATE OR REPLACE TABLE trimmed_episodes AS
 WITH
