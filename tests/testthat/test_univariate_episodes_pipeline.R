@@ -127,6 +127,29 @@ testthat::test_that("Univariate episodes pipeline trims concept timestamps to da
     missing_col = "missing_set_to"
   )
 
+  parquet_files <- list.files(
+    hive_dir,
+    pattern = "\\.parquet$",
+    recursive = TRUE,
+    full.names = TRUE
+  )
+  start_types <- vapply(
+    parquet_files,
+    function(path) {
+      arrow::read_parquet(path, as_data_frame = FALSE)$schema$GetFieldByName("start_episode")$type$ToString()
+    },
+    character(1)
+  )
+  end_types <- vapply(
+    parquet_files,
+    function(path) {
+      arrow::read_parquet(path, as_data_frame = FALSE)$schema$GetFieldByName("end_episode")$type$ToString()
+    },
+    character(1)
+  )
+  testthat::expect_true(all(start_types == "date32[day]"))
+  testthat::expect_true(all(end_types == "date32[day]"))
+
   actual <- data.table::as.data.table(
     DBI::dbGetQuery(
       con,
