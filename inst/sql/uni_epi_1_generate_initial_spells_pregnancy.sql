@@ -1,10 +1,12 @@
 -- Step 1: Generate most-recent-record-resolved, trimmed, chain-merged episodes (replicates v2 firststep_v2.sql)
 -- Input: D3_CONCEPTS (view on concepts_db), study_variables, all_persons, pregnancy_episode_windows
--- Output: episodes_raw (person_id, variable_id, value, start_episode, end_episode, in_pregnancy_window)
+-- Output: episodes_raw (person_id, variable_id, value, start_episode, end_episode)
 --
 -- Pipeline inside this step (mirrors v2 firststep CTEs):
 --   concept_dedup     → deduplicate per (person, concept, date)
---   MCE_SV            → initial episodes: date + end_look_back / date + start_look_back
+--   MCE_SV            → initial episodes restricted to concept dates inside
+--                        pregnancy windows; start at concept date and end at
+--                        pregnancy_end_date
 --   ranked_dates      → sort by start_episode per (person, variable)
 --   intervals         → LEFT JOIN next row to get new_end
 --   adjusted          → most-recent-record resolution: crop end_episode to next_start - 1
@@ -45,10 +47,13 @@ WITH
             sv.variable_id,
             c.value,
             c.date + CAST(sv.end_look_back AS INTEGER) AS start_episode,
-            c.date + CAST(sv.start_look_back AS INTEGER) AS end_episode
+            pw.pregnancy_end_date AS end_episode
         FROM
             concept_dedup c
             JOIN study_variables sv ON c.concept_id = sv.concept_id
+            JOIN pregnancy_episode_windows pw ON pw.person_id = c.person_id
+            AND pw.value = TRUE
+            AND c.date BETWEEN pw.lmp_date AND pw.pregnancy_end_date
         WHERE
             c.concept_id IN ({concept_id_list})
     ),
@@ -203,17 +208,6 @@ SELECT
     cm.variable_id,
     cm.value,
     cm.start_episode,
-    cm.end_episode,
-    EXISTS (
-        SELECT
-            1
-        FROM
-            pregnancy_episode_windows pw
-        WHERE
-            pw.person_id = cm.person_id
-            AND pw.value = TRUE
-            AND cm.start_episode <= pw.pregnancy_end_date
-            AND cm.end_episode >= pw.lmp_date
-    ) AS in_pregnancy_window
+    cm.end_episode
 FROM
     chain_merged cm;

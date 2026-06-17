@@ -1,7 +1,7 @@
 library(testthat)
 library(data.table)
 
-testthat::test_that("uni_epi_1_generate_initial_spells_pregnancy adds in_pregnancy_window flag", {
+testthat::test_that("uni_epi_1_generate_initial_spells_pregnancy keeps only in-pregnancy events and uses pregnancy end date", {
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
@@ -11,7 +11,7 @@ testthat::test_that("uni_epi_1_generate_initial_spells_pregnancy adds in_pregnan
     data.frame(
       person_id = c("P1", "P1", "P2"),
       concept_id = c("CONCEPT_A", "CONCEPT_A", "CONCEPT_A"),
-      date = c("2024-10-01", "2025-02-01", "2024-10-01"),
+      date = c("2024-10-01", "2025-01-15", "2024-10-01"),
       value = c(TRUE, TRUE, TRUE),
       stringsAsFactors = FALSE
     ),
@@ -25,7 +25,7 @@ testthat::test_that("uni_epi_1_generate_initial_spells_pregnancy adds in_pregnan
       variable_id = "VAR_A",
       concept_id = "CONCEPT_A",
       start_look_back = 0L,
-      end_look_back = 0L,
+      end_look_back = -30L,
       stringsAsFactors = FALSE
     ),
     overwrite = TRUE
@@ -69,7 +69,7 @@ testthat::test_that("uni_epi_1_generate_initial_spells_pregnancy adds in_pregnan
 
   actual <- data.table::as.data.table(DBI::dbGetQuery(
     con,
-    "SELECT person_id, variable_id, value, start_episode, end_episode, in_pregnancy_window FROM episodes_raw"
+    "SELECT person_id, variable_id, value, start_episode, end_episode FROM episodes_raw"
   ))
 
   actual[, start_episode := as.Date(start_episode)]
@@ -77,12 +77,11 @@ testthat::test_that("uni_epi_1_generate_initial_spells_pregnancy adds in_pregnan
   data.table::setorder(actual, person_id, start_episode)
 
   expected <- data.table::as.data.table(data.frame(
-    person_id = c("P1", "P1", "P2"),
-    variable_id = c("VAR_A", "VAR_A", "VAR_A"),
-    value = c(TRUE, TRUE, TRUE),
-    start_episode = as.Date(c("2024-10-01", "2025-02-01", "2024-10-01")),
-    end_episode = as.Date(c("2024-10-01", "2025-02-01", "2024-10-01")),
-    in_pregnancy_window = c(TRUE, FALSE, FALSE),
+    person_id = "P1",
+    variable_id = "VAR_A",
+    value = TRUE,
+    start_episode = as.Date("2024-10-01"),
+    end_episode = as.Date("2024-12-31"),
     stringsAsFactors = FALSE
   ))
 

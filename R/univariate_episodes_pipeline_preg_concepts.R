@@ -31,6 +31,12 @@
 ##' If \code{NULL} (default) the fill value is set to \code{NA} (NULL in
 ##' DuckDB) for every variable. If a column name is given and that column
 ##' is not present in \code{study_variables} an error is raised.
+##' @param pregnancy_episode_windows Optional data frame with columns
+##' \code{person_id}, \code{lmp_date}, \code{pregnancy_end_date}, and
+##' \code{value}. This is written to DuckDB as table
+##' \code{pregnancy_episode_windows} and used by SQL step 1 to flag episodes
+##' occurring during pregnancy windows. If \code{NULL}, an empty table with
+##' this schema is created.
 ##'
 ##' @return Invisibly returns NULL; creates/replaces
 ##' D3_UNIVARIATE_EPISODES in con and writes parquet output to output_hive_path.
@@ -48,7 +54,8 @@ univariate_episodes_pipeline <- function(
   output_hive_path,
   batch_size = 5000L,
   batch_column = "batch",
-  missing_col = NULL
+  missing_col = NULL,
+  pregnancy_episode_windows = NULL
 ) {
   if (missing(output_hive_path) || !nzchar(output_hive_path)) {
     stop("output_hive_path must be provided and non-empty.")
@@ -80,6 +87,35 @@ univariate_episodes_pipeline <- function(
     }
     study_variables$missing_set_to <- study_variables[[missing_col]]
   }
+
+  required_preg_cols <- c("person_id", "lmp_date", "pregnancy_end_date", "value")
+  if (is.null(pregnancy_episode_windows)) {
+    pregnancy_episode_windows <- data.frame(
+      person_id = character(),
+      lmp_date = as.Date(character()),
+      pregnancy_end_date = as.Date(character()),
+      value = logical(),
+      stringsAsFactors = FALSE
+    )
+  } else {
+    if (!all(required_preg_cols %in% names(pregnancy_episode_windows))) {
+      missing_cols <- setdiff(required_preg_cols, names(pregnancy_episode_windows))
+      stop(sprintf(
+        "pregnancy_episode_windows is missing required columns: %s",
+        paste(missing_cols, collapse = ", ")
+      ))
+    }
+    pregnancy_episode_windows <- pregnancy_episode_windows[, required_preg_cols, drop = FALSE]
+    pregnancy_episode_windows$lmp_date <- as.Date(pregnancy_episode_windows$lmp_date)
+    pregnancy_episode_windows$pregnancy_end_date <- as.Date(pregnancy_episode_windows$pregnancy_end_date)
+  }
+  DBI::dbWriteTable(
+    con,
+    "pregnancy_episode_windows",
+    pregnancy_episode_windows,
+    overwrite = TRUE
+  )
+
   if (concepts_table != "D3_CONCEPTS") {
     concepts_table_sql <- as.character(DBI::dbQuoteIdentifier(
       con,
