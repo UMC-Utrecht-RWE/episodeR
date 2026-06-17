@@ -43,7 +43,7 @@
 #'
 #' @import data.table
 #' @export
-univariate_episodes_pipeline <- function(
+univariate_episodes_preg_pipeline <- function(
   study_variables,
   con,
   person_ids = NULL,
