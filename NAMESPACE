@@ -2,4 +2,5 @@
 
 export(multivariate_episodes_pipeline)
 export(univariate_episodes_pipeline)
+export(univariate_episodes_preg_pipeline)
 import(data.table)
