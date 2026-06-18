@@ -31,6 +31,10 @@
 ##' If \code{NULL} (default) the fill value is set to \code{NA} (NULL in
 ##' DuckDB) for every variable. If a column name is given and that column
 ##' is not present in \code{study_variables} an error is raised.
+##' @param is_prior Optional column in study_variables. Variables with
+##' value \code{TRUE} receive whole-window TRUE episodes in later
+##' pregnancy windows after the first window where the current pipeline
+##' already finds a TRUE event. If absent, it is treated as missing.
 ##' @param pregnancy_episode_windows Optional data frame with columns
 ##' \code{person_id}, \code{lmp_date}, \code{pregnancy_end_date}, and
 ##' \code{value}. This is written to DuckDB as table
@@ -62,6 +66,8 @@ univariate_episodes_preg_pipeline <- function(
   }
   dir.create(output_hive_path, recursive = TRUE, showWarnings = FALSE)
 
+  required_preg_cols <- c("person_id", "lmp_date", "pregnancy_end_date", "value")
+
   if (!(batch_column %in% names(study_variables))) {
     stop(sprintf(
       "study_variables must include a Boolean '%s' column to control batching per variable.",
@@ -88,7 +94,28 @@ univariate_episodes_preg_pipeline <- function(
     study_variables$missing_set_to <- study_variables[[missing_col]]
   }
 
-  required_preg_cols <- c("person_id", "lmp_date", "pregnancy_end_date", "value")
+  if (!("is_prior" %in% names(study_variables))) {
+    study_variables$is_prior <- NA
+  }
+
+  prior_values <- study_variables[["is_prior"]]
+  if (is.logical(prior_values)) {
+    use_prior <- prior_values
+  } else {
+    normalized_prior <- tolower(trimws(as.character(prior_values)))
+    use_prior <- normalized_prior %in% c("true", "t", "1", "yes", "y")
+  }
+  use_prior[is.na(use_prior)] <- FALSE
+  prior_concepts <- sort(unique(study_variables$concept_id[use_prior & !is.na(study_variables$concept_id)]))
+  if (length(prior_concepts) > 0) {
+    logger::log_info(
+      "Applying is_prior carry-forward to concept_id(s): {paste(prior_concepts, collapse = ', ')}"
+    )
+  } else {
+    logger::log_info("No concept_id marked with is_prior=TRUE; carry-forward is skipped.")
+  }
+
+
   if (is.null(pregnancy_episode_windows)) {
     pregnancy_episode_windows <- data.frame(
       person_id = character(),
@@ -105,7 +132,7 @@ univariate_episodes_preg_pipeline <- function(
         paste(missing_cols, collapse = ", ")
       ))
     }
-    pregnancy_episode_windows <- pregnancy_episode_windows[, required_preg_cols, drop = FALSE]
+    pregnancy_episode_windows <- as.data.frame(pregnancy_episode_windows)[, required_preg_cols, drop = FALSE]
     pregnancy_episode_windows$lmp_date <- as.Date(pregnancy_episode_windows$lmp_date)
     pregnancy_episode_windows$pregnancy_end_date <- as.Date(pregnancy_episode_windows$pregnancy_end_date)
   }

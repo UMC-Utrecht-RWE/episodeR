@@ -1,7 +1,7 @@
 library(testthat)
 library(data.table)
 
-testthat::test_that("uni_epi_1_generate_initial_spells_pregnancy keeps only in-pregnancy events and uses pregnancy end date", {
+testthat::test_that("uni_epi_1_generate_initial_spells_pregnancy carries PRIOR variables into later pregnancy windows", {
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
@@ -24,6 +24,7 @@ testthat::test_that("uni_epi_1_generate_initial_spells_pregnancy keeps only in-p
     data.frame(
       variable_id = "VAR_A",
       concept_id = "CONCEPT_A",
+      is_prior = TRUE,
       start_look_back = 0L,
       end_look_back = -30L,
       stringsAsFactors = FALSE
@@ -42,10 +43,10 @@ testthat::test_that("uni_epi_1_generate_initial_spells_pregnancy keeps only in-p
     con,
     "pregnancy_episode_windows",
     data.frame(
-      person_id = c("P1", "P2"),
-      lmp_date = as.Date(c("2024-09-01", "2024-09-01")),
-      pregnancy_end_date = as.Date(c("2024-12-31", "2024-12-31")),
-      value = c(TRUE, FALSE),
+      person_id = c("P1", "P1", "P2"),
+      lmp_date = as.Date(c("2024-09-01", "2025-02-01", "2024-09-01")),
+      pregnancy_end_date = as.Date(c("2024-12-31", "2025-05-31", "2024-12-31")),
+      value = c(TRUE, TRUE, FALSE),
       stringsAsFactors = FALSE
     ),
     overwrite = TRUE
@@ -77,11 +78,11 @@ testthat::test_that("uni_epi_1_generate_initial_spells_pregnancy keeps only in-p
   data.table::setorder(actual, person_id, start_episode)
 
   expected <- data.table::as.data.table(data.frame(
-    person_id = "P1",
-    variable_id = "VAR_A",
-    value = TRUE,
-    start_episode = as.Date("2024-10-01"),
-    end_episode = as.Date("2024-12-31"),
+    person_id = c("P1", "P1"),
+    variable_id = c("VAR_A", "VAR_A"),
+    value = c(FALSE, TRUE),
+    start_episode = as.Date(c("2024-10-01", "2025-02-01")),
+    end_episode = as.Date(c("2024-12-31", "2025-05-31")),
     stringsAsFactors = FALSE
   ))
 
