@@ -215,38 +215,25 @@ multivariate_episodes_pipeline <- function(
     to <- min(from + step - 1L, n_persons)
     batch_episodes <- run_batch(person_ids[from:to])
 
-    DBI::dbWriteTable(con, "i_batch_episodes", batch_episodes, overwrite = TRUE)
+    DBI::dbWriteTable(con, "D3_MULTIVARIATE_EPISODES", batch_episodes, append = TRUE)
     rm(batch_episodes)
 
-    if (i_batch == 1L) {
-      DBI::dbExecute(
-        con,
-        "CREATE OR REPLACE TABLE i_batch_output AS SELECT * FROM i_batch_episodes"
-      )
-    } else {
-      DBI::dbExecute(
-        con,
-        "INSERT INTO i_batch_output BY NAME SELECT * FROM i_batch_episodes"
-      )
-    }
   }
 
   logger::log_info("Batch processing complete")
 
   DBI::dbExecute(
     con,
-    "CREATE OR REPLACE TABLE D3_MULTIVARIATE_EPISODES AS
-      SELECT
-        person_id,
-        CAST(start_episode AS DATE) AS start_episode,
-        CAST(end_episode AS DATE) AS end_episode,
-        * EXCLUDE (person_id, start_episode, end_episode)
-      FROM i_batch_output"
-  )
-  DBI::dbExecute(
-    con,
     sprintf(
-      "COPY D3_MULTIVARIATE_EPISODES TO '%s' (FORMAT 'parquet')",
+      "COPY (
+          SELECT
+            person_id,
+            CAST(start_episode AS DATE) AS start_episode,
+            CAST(end_episode AS DATE) AS end_episode,
+            * EXCLUDE (person_id, start_episode, end_episode)
+         FROM D3_MULTIVARIATE_EPISODES
+         )
+       TO '%s' (FORMAT 'parquet')",
       output_path
     )
   )
