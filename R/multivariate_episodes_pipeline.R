@@ -2,8 +2,8 @@
 ##'
 ##' Processes D3_UNIVARIATE_EPISODES hive-partitioned parquet into a wide
 ##' multivariate combination table (D3_MULTIVARIATE_EPISODES), processing
-##' persons in batches of batch_size and writing each batch to parquet before
-##' combining them into the final table.
+##' persons in batches of batch_size and appending each batch into a single
+##' accumulator table before writing the final table to parquet once.
 ##'
 ##' @param study_variables Data frame with variable metadata including
 ##' variable_id and a Boolean batching column.
@@ -198,20 +198,13 @@ multivariate_episodes_pipeline <- function(
     merged_episodes
   }
 
-  # Write each batch to its own parquet part, then combine the parts at the end
-  batch_dir <- file.path(
-    dirname(output_path),
-    sprintf("mv_episodes_batches_%s", basename(tempfile("")))
-  )
-  dir.create(batch_dir, recursive = TRUE, showWarnings = FALSE)
-  on.exit(unlink(batch_dir, recursive = TRUE), add = TRUE)
-
   # Process batch_size persons at a time
   n_persons <- length(person_ids)
   step <- if (do_batch || n_persons > batch_size) batch_size else n_persons
   batch_starts <- seq.int(1L, n_persons, by = step)
   logger::log_info(paste("Number of batches:", length(batch_starts)))
 
+  # Attach each batch into a single table, then write it once
   for (i_batch in seq_along(batch_starts)) {
     logger::log_info(sprintf(
       "Processing batch %d of %d",
@@ -222,32 +215,33 @@ multivariate_episodes_pipeline <- function(
     to <- min(from + step - 1L, n_persons)
     batch_episodes <- run_batch(person_ids[from:to])
 
-    DBI::dbWriteTable(con, "i_batch_output", batch_episodes, overwrite = TRUE)
-    DBI::dbExecute(
-      con,
-      sprintf(
-        "COPY i_batch_output TO '%s' (FORMAT 'parquet')",
-        file.path(batch_dir, sprintf("batch_%05d.parquet", i_batch))
-      )
-    )
+    DBI::dbWriteTable(con, "i_batch_episodes", batch_episodes, overwrite = TRUE)
     rm(batch_episodes)
+
+    if (i_batch == 1L) {
+      DBI::dbExecute(
+        con,
+        "CREATE OR REPLACE TABLE i_batch_output AS SELECT * FROM i_batch_episodes"
+      )
+    } else {
+      DBI::dbExecute(
+        con,
+        "INSERT INTO i_batch_output BY NAME SELECT * FROM i_batch_episodes"
+      )
+    }
   }
 
   logger::log_info("Batch processing complete")
 
-  # union_by_name fills variables a batch never produced (old rbindlist fill = TRUE).
   DBI::dbExecute(
     con,
-    sprintf(
-      "CREATE OR REPLACE TABLE D3_MULTIVARIATE_EPISODES AS
-        SELECT
-          person_id,
-          CAST(start_episode AS DATE) AS start_episode,
-          CAST(end_episode AS DATE) AS end_episode,
-          * EXCLUDE (person_id, start_episode, end_episode)
-        FROM read_parquet('%s/*.parquet', union_by_name = TRUE)",
-      batch_dir
-    )
+    "CREATE OR REPLACE TABLE D3_MULTIVARIATE_EPISODES AS
+      SELECT
+        person_id,
+        CAST(start_episode AS DATE) AS start_episode,
+        CAST(end_episode AS DATE) AS end_episode,
+        * EXCLUDE (person_id, start_episode, end_episode)
+      FROM i_batch_output"
   )
   DBI::dbExecute(
     con,
