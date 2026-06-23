@@ -28,15 +28,16 @@
 #' @import data.table
 #' @export
 multivariate_episodes_pipeline <- function(
-    study_variables,
-    con,
-    d3_univariate_episodes_path,
-    sql_dir,
-    output_path,
-    person_ids = NULL,
-    batch_size = 7000L,
-    batch_column = "batch",
-    data_type_col = "data_type") {
+  study_variables,
+  con,
+  d3_univariate_episodes_path,
+  sql_dir,
+  output_path,
+  person_ids = NULL,
+  batch_size = 7000L,
+  batch_column = "batch",
+  data_type_col = "data_type"
+) {
   if (missing(output_path) || !nzchar(output_path)) {
     stop("output_path must be provided and non-empty.")
   }
@@ -68,19 +69,19 @@ multivariate_episodes_pipeline <- function(
   do_batch <- any(use_batch)
 
   # Build date dimension from full univariate episodes range
-  DBI::dbExecute(
-    con,
-    sprintf(
-      "CREATE OR REPLACE TABLE dim_date AS
-     SELECT unnest(generate_series(
-       MIN(start_episode)::DATE,
-       MAX(end_episode)::DATE,
-       INTERVAL '1 day'
-     )) AS dates
-     FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)",
-      d3_univariate_episodes_path
-    )
-  )
+  # DBI::dbExecute(
+  #   con,
+  #   sprintf(
+  #     "CREATE OR REPLACE TABLE dim_date AS
+  #    SELECT unnest(generate_series(
+  #      MIN(start_episode)::DATE,
+  #      MAX(end_episode)::DATE,
+  #      INTERVAL '1 day'
+  #    )) AS dates
+  #    FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)",
+  #     d3_univariate_episodes_path
+  #   )
+  # )
 
   # Load SQL scripts once before batching
   uni_epi_param <- sprintf(
@@ -156,7 +157,9 @@ multivariate_episodes_pipeline <- function(
     # Convert variable columns to declared data types
     if (!is.null(data_type_col) && data_type_col %in% names(study_variables)) {
       i_status_boolmat <- apply_data_types(
-        i_status_boolmat, study_variables, data_type_col
+        i_status_boolmat,
+        study_variables,
+        data_type_col
       )
     }
 

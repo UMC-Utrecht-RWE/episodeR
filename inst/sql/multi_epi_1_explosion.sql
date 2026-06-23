@@ -35,21 +35,39 @@ CREATE TABLE new_variables_ids AS (
         AND (L.value = episodes_filtered.value OR L.value IS NULL AND episodes_filtered.value IS NULL)
 );
 
-CREATE TABLE EXPLODED AS 	(
-								SELECT DISTINCT
-									-- Explode the table to one row per person per variable per day
-									V.person_id
-									, V.int_var_id									
-									, DD.dates
-								FROM new_variables_ids V
+-- CREATE TABLE EXPLODED AS 	(
+-- 								SELECT DISTINCT
+-- 									-- Explode the table to one row per person per variable per day
+-- 									V.person_id
+-- 									, V.int_var_id									
+-- 									, DD.dates
+-- 								FROM new_variables_ids V
 								
-								INNER JOIN dim_date DD
-									-- Add the date dimension
-									-- This is going to be a huge explosion, but that's what I want
-									ON DD.dates BETWEEN V.start_episode AND V.end_episode 
+-- 								INNER JOIN dim_date DD
+-- 									-- Add the date dimension
+-- 									-- This is going to be a huge explosion, but that's what I want
+-- 									ON DD.dates BETWEEN V.start_episode AND V.end_episode 
 								
-							ORDER BY
-								V.person_id ASC
-								, DD.dates ASC
-								, V.int_var_id ASC
-						);
+-- 							ORDER BY
+-- 								V.person_id ASC
+-- 								, DD.dates ASC
+-- 								, V.int_var_id ASC
+-- 						);
+
+CREATE TABLE EXPLODED AS (
+    SELECT DISTINCT
+        V.person_id,
+        V.int_var_id,
+        UNNEST(GENERATE_SERIES(
+            V.start_episode::DATE,
+            V.end_episode::DATE,
+            INTERVAL '1 day'
+        )) AS dates
+
+    FROM new_variables_ids V
+
+    ORDER BY
+        V.person_id ASC,
+        dates ASC,
+        V.int_var_id ASC
+);
