@@ -4,9 +4,14 @@
 --
 -- Pipeline inside this step (mirrors v2 firststep CTEs):
 --   concept_dedup     → deduplicate per (person, concept, date)
---   MCE_SV            → initial episodes restricted to concept dates inside
---                        pregnancy windows; start at concept date and end at
---                        pregnancy_end_date
+--   MCE_SV            → two modes controlled by study_variables.excluding_pregnancies:
+--                        FALSE (default): concept date inside pregnancy window
+--                          (lmp_date → pregnancy_end_date); episode from concept date
+--                          to pregnancy_end_date, value preserved.
+--                        TRUE: concept date inside look-back window
+--                          (lmp_date - start_look_back → lmp_date); episode forced to
+--                          TRUE from concept date to pregnancy_end_date; any concept date
+--                          that falls within a pregnancy window is excluded.
 --   prior_carry       → for study_variables with is_prior = TRUE, create
 --                        TRUE episodes spanning later pregnancy windows after
 --                        the first TRUE pregnancy window; first TRUE episode
@@ -46,6 +51,9 @@ GROUP BY
 CREATE OR REPLACE TABLE trimmed_episodes AS
 WITH
     MCE_SV AS (
+        -- Standard mode (excluding_pregnancies = FALSE / NULL):
+        -- concept date falls inside pregnancy window; episode from concept date
+        -- to pregnancy_end_date with the original concept value.
         SELECT DISTINCT
             c.person_id,
             sv.variable_id,
@@ -60,6 +68,45 @@ WITH
             AND c.date BETWEEN pw.lmp_date AND pw.pregnancy_end_date
         WHERE
             c.concept_id IN ({concept_id_list})
+            AND COALESCE(
+                UPPER(TRIM(CAST(sv.excluding_pregnancies AS VARCHAR))),
+                ''
+            ) NOT IN ('TRUE', 'T', '1', 'YES', 'Y')
+        UNION ALL
+        -- Excluding mode (excluding_pregnancies = TRUE):
+        -- concept date falls in the look-back window before lmp_date
+        -- (lmp_date - start_look_back <= concept_date <= lmp_date); episode is forced
+        -- TRUE from concept date to pregnancy_end_date.
+        -- Events whose concept date falls within any pregnancy window are excluded.
+        SELECT DISTINCT
+            c.person_id,
+            sv.variable_id,
+            'TRUE' AS value,
+            c.date AS start_episode,
+            pw.pregnancy_end_date AS end_episode
+        FROM
+            concept_dedup c
+            JOIN study_variables sv ON c.concept_id = sv.concept_id
+            JOIN pregnancy_episode_windows pw ON pw.person_id = c.person_id
+            AND COALESCE(UPPER(TRIM(CAST(pw.value AS VARCHAR))), '') IN ('TRUE', 'T', '1', 'YES', 'Y')
+            AND c.date BETWEEN pw.lmp_date - CAST(sv.start_look_back AS INTEGER) AND pw.lmp_date
+        WHERE
+            c.concept_id IN ({concept_id_list})
+            AND COALESCE(
+                UPPER(TRIM(CAST(sv.excluding_pregnancies AS VARCHAR))),
+                ''
+            ) IN ('TRUE', 'T', '1', 'YES', 'Y')
+            -- Exclude concept dates that fall within any active pregnancy window
+            AND NOT EXISTS (
+                SELECT
+                    1
+                FROM
+                    pregnancy_episode_windows excl_pw
+                WHERE
+                    excl_pw.person_id = c.person_id
+                    AND COALESCE(UPPER(TRIM(CAST(excl_pw.value AS VARCHAR))), '') IN ('TRUE', 'T', '1', 'YES', 'Y')
+                    AND c.date BETWEEN excl_pw.lmp_date AND excl_pw.pregnancy_end_date
+            )
     ),
     ranked_dates AS (
         SELECT

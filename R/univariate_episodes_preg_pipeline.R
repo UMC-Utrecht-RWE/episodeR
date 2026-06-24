@@ -98,6 +98,27 @@ univariate_episodes_preg_pipeline <- function(
     study_variables$is_prior <- NA
   }
 
+  if (!("excluding_pregnancies" %in% names(study_variables))) {
+    study_variables$excluding_pregnancies <- NA
+  }
+
+  excl_preg_values <- study_variables[["excluding_pregnancies"]]
+  if (is.logical(excl_preg_values)) {
+    use_excl_preg <- excl_preg_values
+  } else {
+    normalized_excl <- tolower(trimws(as.character(excl_preg_values)))
+    use_excl_preg <- normalized_excl %in% c("true", "t", "1", "yes", "y")
+  }
+  use_excl_preg[is.na(use_excl_preg)] <- FALSE
+  excl_preg_variables <- sort(unique(study_variables$variable_id[use_excl_preg & !is.na(study_variables$variable_id)]))
+  if (length(excl_preg_variables) > 0) {
+    logger::log_info(
+      "excluding_pregnancies=TRUE for variable_id(s): {paste(excl_preg_variables, collapse = ', ')}"
+    )
+  } else {
+    logger::log_info("No variable marked with excluding_pregnancies=TRUE; look-back exclusion mode is inactive.")
+  }
+
   prior_values <- study_variables[["is_prior"]]
   if (is.logical(prior_values)) {
     use_prior <- prior_values
