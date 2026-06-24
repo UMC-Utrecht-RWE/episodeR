@@ -43,6 +43,11 @@ multivariate_episodes_pipeline <- function(
   if (missing(output_path) || !nzchar(output_path)) {
     stop("output_path must be provided and non-empty.")
   }
+
+  if (dir.exists(output_path)) {
+    unlink(output_path, recursive = TRUE, force = TRUE)
+  }
+
   dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
 
   if (!(batch_column %in% names(study_variables))) {
@@ -215,9 +220,13 @@ multivariate_episodes_pipeline <- function(
     to <- min(from + step - 1L, n_persons)
     batch_episodes <- run_batch(person_ids[from:to])
 
-    DBI::dbWriteTable(con, "D3_MULTIVARIATE_EPISODES", batch_episodes, append = TRUE)
+    DBI::dbWriteTable(
+      con,
+      "D3_MULTIVARIATE_EPISODES",
+      batch_episodes,
+      append = TRUE
+    )
     rm(batch_episodes)
-
   }
 
   logger::log_info("Batch processing complete")
