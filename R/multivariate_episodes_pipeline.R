@@ -57,6 +57,25 @@ multivariate_episodes_pipeline <- function(
     ))
   }
 
+  if (!("variable_id" %in% names(study_variables))) {
+    stop("study_variables must include a 'variable_id' column.")
+  }
+
+  target_variable_ids <- unique(study_variables$variable_id)
+  target_variable_ids <- target_variable_ids[!is.na(target_variable_ids)]
+  if (length(target_variable_ids) == 0) {
+    stop("study_variables has no non-missing variable_id values to process.")
+  }
+  logger::log_info(
+    "Processing only variable_id(s) present in study_variables: {paste(sort(target_variable_ids), collapse = ', ')}"
+  )
+  DBI::dbWriteTable(
+    con,
+    "list_sv",
+    data.frame(variable_id = target_variable_ids),
+    overwrite = TRUE
+  )
+
   batch_values <- study_variables[[batch_column]]
   if (is.logical(batch_values)) {
     use_batch <- batch_values
