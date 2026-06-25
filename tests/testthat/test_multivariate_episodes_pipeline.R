@@ -66,7 +66,7 @@ testthat::test_that("Multivariate episodes pipeline produces expected output", {
     batch_column = "batch"
   )
 
-# check date schema, throw error if timestamp
+  # check date schema, throw error if timestamp
   output_schema <- arrow::read_parquet(
     output_parquet,
     as_data_frame = FALSE
@@ -80,13 +80,79 @@ testthat::test_that("Multivariate episodes pipeline produces expected output", {
     "date32[day]"
   )
 
-# check values match expected
+  # check values match expected
   actual <- data.table::as.data.table(
     DBI::dbGetQuery(
       con,
       sprintf("SELECT * FROM read_parquet('%s')", output_parquet)
     )
   )
+  actual[, start_episode := as.Date(start_episode)]
+  actual[, end_episode := as.Date(end_episode)]
+  data.table::setorder(actual, person_id, start_episode)
+
+  expected <- data.table::fread(file.path(
+    data_dir,
+    "D3_MULTIVARIATE_EPISODES.csv"
+  ))
+  expected[, start_episode := as.Date(start_episode)]
+  expected[, end_episode := as.Date(end_episode)]
+  data.table::setorder(expected, person_id, start_episode)
+  data.table::setcolorder(actual, names(expected))
+
+  testthat::expect_equal(actual, expected)
+})
+
+testthat::test_that("batched run matches the single-batch expected output", {
+  data_dir <- testthat::test_path("data", "multivariate_episodes")
+  sql_dir <- system.file(package = "episodeR", "sql/")
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  uni_hive_dir <- file.path(tempdir(), "multi_test_uni_hive_batched")
+  output_parquet <- file.path(tempdir(), "multi_test_batched.parquet")
+  unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
+  unlink(output_parquet, force = TRUE)
+  on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
+  on.exit(unlink(output_parquet, force = TRUE), add = TRUE)
+
+  uni_epi <- data.table::fread(file.path(
+    data_dir,
+    "D3_UNIVARIATE_EPISODES.csv"
+  ))
+  uni_epi[, start_episode := as.Date(start_episode)]
+  uni_epi[, end_episode := as.Date(end_episode)]
+  DBI::dbWriteTable(con, "uni_epi_input", uni_epi, overwrite = TRUE)
+  dir.create(uni_hive_dir, recursive = TRUE, showWarnings = FALSE)
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "COPY uni_epi_input TO '%s' (FORMAT PARQUET, PARTITION_BY (variable_id))",
+      uni_hive_dir
+    )
+  )
+
+  sv_meta <- data.table::fread(file.path(data_dir, "study_variables.csv"))
+  sv_meta[, batch := FALSE]
+  person_ids <- unique(uni_epi$person_id)
+
+  # batch_size = 1 forces one batch per person, exercising the streamed union
+  multivariate_episodes_pipeline(
+    study_variables = sv_meta,
+    con = con,
+    d3_univariate_episodes_path = uni_hive_dir,
+    sql_dir = sql_dir,
+    output_path = output_parquet,
+    person_ids = person_ids,
+    batch_size = 1,
+    batch_column = "batch"
+  )
+
+  actual <- data.table::as.data.table(DBI::dbGetQuery(
+    con,
+    sprintf("SELECT * FROM read_parquet('%s')", output_parquet)
+  ))
   actual[, start_episode := as.Date(start_episode)]
   actual[, end_episode := as.Date(end_episode)]
   data.table::setorder(actual, person_id, start_episode)
