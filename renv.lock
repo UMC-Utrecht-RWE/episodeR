@@ -102,7 +102,8 @@
       "Description": "Provides color schemes for maps (and other graphics) designed by Cynthia Brewer as described at http://colorbrewer2.org.",
       "License": "Apache License 2.0",
       "NeedsCompilation": "no",
-      "Repository": "CRAN"
+      "Repository": "CRAN",
+      "Encoding": "UTF-8"
     },
     "Rcpp": {
       "Package": "Rcpp",
@@ -264,7 +265,8 @@
       "NeedsCompilation": "no",
       "Author": "Hadley Wickham [aut, cre]",
       "Maintainer": "Hadley Wickham <hadley@rstudio.com>",
-      "Repository": "CRAN"
+      "Repository": "CRAN",
+      "Encoding": "UTF-8"
     },
     "bit": {
       "Package": "bit",
@@ -428,7 +430,8 @@
       "NeedsCompilation": "no",
       "Author": "Jennifer Bryan [cre, aut], Hadley Wickham [ctb]",
       "Maintainer": "Jennifer Bryan <jenny@stat.ubc.ca>",
-      "Repository": "CRAN"
+      "Repository": "CRAN",
+      "Encoding": "UTF-8"
     },
     "cli": {
       "Package": "cli",
@@ -1230,7 +1233,8 @@
         "stats",
         "graphics"
       ],
-      "Repository": "CRAN"
+      "Repository": "CRAN",
+      "Encoding": "UTF-8"
     },
     "lifecycle": {
       "Package": "lifecycle",
@@ -1491,17 +1495,16 @@
         "withr (>= 3.0.2)"
       ],
       "Depends": [
-        "R (>= 4.1.0)"
+        "R (>= 4.0.0)"
       ],
+      "Author": "Mattia Cinelli [aut, cre] (ORCID: <https://orcid.org/0000-0001-9306-8079>)",
+      "Maintainer": "Mattia Cinelli <m.cinelli@umcutrecht.nl>",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "picard",
       "RemoteUsername": "UMC-Utrecht-RWE",
       "RemoteRef": "HEAD",
-      "RemoteSha": "a8bb9b32c6faffb9622bef82d502725b9e5bb8c3",
-      "NeedsCompilation": "no",
-      "Author": "Mattia Cinelli [aut, cre] (ORCID: <https://orcid.org/0000-0001-9306-8079>)",
-      "Maintainer": "Mattia Cinelli <m.cinelli@umcutrecht.nl>"
+      "RemoteSha": "a8bb9b32c6faffb9622bef82d502725b9e5bb8c3"
     },
     "pillar": {
       "Package": "pillar",
@@ -1689,7 +1692,8 @@
       ],
       "Collate": "'adjective.R' 'adverb.R' 'exclamation.R' 'verb.R' 'rpackage.R' 'package.R'",
       "NeedsCompilation": "no",
-      "Repository": "CRAN"
+      "Repository": "CRAN",
+      "Encoding": "UTF-8"
     },
     "prettyunits": {
       "Package": "prettyunits",
