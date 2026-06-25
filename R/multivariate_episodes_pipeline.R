@@ -273,7 +273,9 @@ multivariate_episodes_pipeline <- function(
                 * EXCLUDE (person_id, start_episode, end_episode)
              FROM i_batch_multivariate_episodes
              )
-           TO '%s' (FORMAT 'parquet')",
+           TO '%s' (FORMAT 'parquet',
+            ROW_GROUP_SIZE 122880,
+            PER_THREAD_ROW_GROUPS TRUE)",
           batch_file_sql
         )
       )
