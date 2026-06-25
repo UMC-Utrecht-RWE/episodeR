@@ -274,8 +274,7 @@ multivariate_episodes_pipeline <- function(
              FROM i_batch_multivariate_episodes
              )
            TO '%s' (FORMAT 'parquet',
-            ROW_GROUP_SIZE 122880,
-            PER_THREAD_ROW_GROUPS TRUE)",
+            ROW_GROUP_SIZE 122880)",
           batch_file_sql
         )
       )
