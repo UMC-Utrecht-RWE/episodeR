@@ -96,7 +96,7 @@ multivariate_episodes_pipeline_6 <- function(
   )
   sql_combine <- picard::load_sql_query(file.path(
     sql_dir,
-    "multi_epi_2_combine.sql"
+    "multi_epi_2_combine_2.sql"
   ))
   sql_mergestatus <- picard::load_sql_query(file.path(
     sql_dir,
