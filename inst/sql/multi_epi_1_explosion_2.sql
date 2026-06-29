@@ -37,7 +37,7 @@ CREATE OR REPLACE TABLE new_variables_ids AS (
 -- Explode each episode into one row per day directly from its own start/end —
 -- no dim_date table and no BETWEEN join needed
 CREATE OR REPLACE TABLE EXPLODED AS (
-    SELECT DISTINCT
+    SELECT
         V.person_id,
         V.int_var_id,
         UNNEST(GENERATE_SERIES(
@@ -47,9 +47,4 @@ CREATE OR REPLACE TABLE EXPLODED AS (
         )) AS dates
 
     FROM new_variables_ids V
-
-    ORDER BY
-        V.person_id ASC,
-        dates ASC,
-        V.int_var_id ASC
 );
