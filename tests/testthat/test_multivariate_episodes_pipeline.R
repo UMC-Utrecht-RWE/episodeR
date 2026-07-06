@@ -111,7 +111,12 @@ testthat::test_that("batched run matches the single-batch expected output", {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   uni_hive_dir <- file.path(tempdir(), "multi_test_uni_hive_batched")
-  output_parquet <- file.path(tempdir(), "multi_test_batched.parquet")
+  # output_parquet <- file.path(tempdir(), "multi_test_batched.parquet")
+  output_parquet <- file.path(
+    tempdir(),
+    "D3_MULTIVARIATE_EPISODES"
+    # "batch_00001.parquet"
+  )
   unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
   unlink(output_parquet, force = TRUE)
   on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
