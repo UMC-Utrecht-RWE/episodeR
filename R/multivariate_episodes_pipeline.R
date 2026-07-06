@@ -147,10 +147,7 @@ multivariate_episodes_pipeline <- function(
   logger::log_info(paste("Number of batches:", length(batch_starts)))
 
   if (is_batched_run) {
-    batch_output_dir <- file.path(
-      dirname(output_path),
-      "D3_MULTIVARIATE_EPISODES"
-    )
+    batch_output_dir <- file.path(output_path)
     if (dir.exists(batch_output_dir)) {
       unlink(batch_output_dir, recursive = TRUE, force = TRUE)
     }
@@ -210,7 +207,7 @@ multivariate_episodes_pipeline <- function(
     } else {
       DBI::dbWriteTable(
         con,
-        "D3_MULTIVARIATE_EPISODES",
+        "D3_MULTIVARIATE_EPISODES", #! Flagging hardcoded table name
         batch_episodes,
         append = TRUE
       )
