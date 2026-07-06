@@ -139,89 +139,6 @@ multivariate_episodes_pipeline <- function(
     message("person_ids derived from D3_UNIVARIATE_EPISODES")
   }
 
-  run_batch <- function(ids_subset) {
-    DBI::dbWriteTable(
-      con,
-      "i_batch_persons",
-      data.frame(person_id = ids_subset, stringsAsFactors = FALSE),
-      overwrite = TRUE
-    )
-
-    # Step 1: Explode spells to one row per person per variable per day
-    picard::execute_sql_file(sql = sql_explosion, conn = con)
-
-    # Step 2: Combine daily values into multivariate status intervals
-    picard::execute_sql_file(sql = sql_combine, conn = con)
-
-    i_multivariate_episode <- data.table::as.data.table(DBI::dbReadTable(
-      con,
-      "multivariate_episode"
-    ))
-    dim_var <- data.table::as.data.table(DBI::dbReadTable(con, "dim_var"))
-
-    # Unpack combination strings -> one row per variable per episode
-    i_status_split <- i_multivariate_episode[,
-      .(combination = unlist(strsplit(as.character(combination), ";"))),
-      by = .(person_id, start_episode, end_episode)
-    ]
-    i_status_split[, combination := as.integer(combination)]
-    rm(i_multivariate_episode)
-
-    # Pivot to wide format (person x episode x variable)
-    i_status_boolmat <- i_status_split[
-      dim_var,
-      on = .(combination = int_var_id),
-      nomatch = 0
-    ]
-    i_status_boolmat <- data.table::dcast(
-      i_status_boolmat,
-      person_id + start_episode + end_episode ~ variable_id,
-      value.var = "value",
-      fill = FALSE
-    )
-
-    # Convert variable columns to declared data types
-    if (!is.null(data_type_col) && data_type_col %in% names(study_variables)) {
-      i_status_boolmat <- apply_data_types(
-        i_status_boolmat,
-        study_variables,
-        data_type_col
-      )
-    }
-
-    # Build compact combination dictionary and encode episodes by index
-    variables_cols <- names(i_status_boolmat)[
-      !names(i_status_boolmat) %in%
-        c("person_id", "start_episode", "end_episode")
-    ]
-    dictionary <- unique(i_status_boolmat[, ..variables_cols])
-    dictionary[, dic_index := .I]
-
-    episodes_coded <- merge(i_status_boolmat, dictionary, by = variables_cols)[,
-      !(variables_cols),
-      with = FALSE
-    ]
-    DBI::dbWriteTable(
-      con,
-      "multivariate_episode_coded",
-      episodes_coded,
-      overwrite = TRUE
-    )
-    rm(i_status_boolmat, episodes_coded)
-
-    # Step 3: Merge adjacent identical-status intervals
-    merged_coded <- data.table::as.data.table(DBI::dbGetQuery(
-      con,
-      sql_mergestatus
-    ))
-    merged_episodes <- merge(merged_coded, dictionary, by = "dic_index")[,
-      !("dic_index"),
-      with = FALSE
-    ]
-    rm(i_status_split, dim_var, merged_coded, dictionary)
-    merged_episodes
-  }
-
   # Process batch_size persons at a time
   n_persons <- length(person_ids)
   is_batched_run <- do_batch || n_persons > batch_size
@@ -230,7 +147,10 @@ multivariate_episodes_pipeline <- function(
   logger::log_info(paste("Number of batches:", length(batch_starts)))
 
   if (is_batched_run) {
-    batch_output_dir <- file.path(dirname(output_path), "D3_MULTIVARIATE_EPISODES")
+    batch_output_dir <- file.path(
+      dirname(output_path),
+      "D3_MULTIVARIATE_EPISODES"
+    )
     if (dir.exists(batch_output_dir)) {
       unlink(batch_output_dir, recursive = TRUE, force = TRUE)
     }
@@ -246,7 +166,15 @@ multivariate_episodes_pipeline <- function(
     ))
     from <- batch_starts[i_batch]
     to <- min(from + step - 1L, n_persons)
-    batch_episodes <- run_batch(person_ids[from:to])
+    batch_episodes <- run_batch(
+      ids_subset = person_ids[from:to],
+      connection = con,
+      sql_explosion = sql_explosion,
+      sql_combine = sql_combine,
+      sql_mergestatus = sql_mergestatus,
+      study_variables = study_variables,
+      data_type_col = data_type_col
+    )
 
     if (is_batched_run) {
       DBI::dbWriteTable(
