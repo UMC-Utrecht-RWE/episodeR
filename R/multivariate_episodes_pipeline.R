@@ -291,8 +291,24 @@ multivariate_episodes_pipeline <- function(
   }
 
   logger::log_info("Batch processing complete")
+  if (is_batched_run) {
+    batch_glob <- file.path(batch_output_dir, "*.parquet")
+    batch_glob_sql <- gsub("'", "''", batch_glob, fixed = TRUE)
+    output_path_sql <- gsub("'", "''", output_path, fixed = TRUE)
 
-  if (!is_batched_run) {
+    DBI::dbExecute(
+      con,
+      sprintf(
+        "COPY (
+          SELECT *
+          FROM read_parquet('%s')
+        )
+        TO '%s' (FORMAT 'parquet')",
+        batch_glob_sql,
+        output_path_sql
+      )
+    )
+  } else{
     DBI::dbExecute(
       con,
       sprintf(
