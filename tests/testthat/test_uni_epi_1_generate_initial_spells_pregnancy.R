@@ -2,6 +2,23 @@ library(testthat)
 library(data.table)
 
 testthat::test_that("uni_epi_1_generate_initial_spells_pregnancy carries PRIOR variables into later pregnancy windows", {
+# testing logic with study_variables / excluding_pregnancies = NA selects 
+# standard mode, and is_prior = TRUE enables the prior-variable carry-forward logic.
+#
+# P1's concept on 2024-10-01 falls inside the first active pregnancy
+# window, so it initially creates a TRUE episode from the concept date
+# through the pregnancy end date: 2024-10-01 to 2024-12-31.
+#
+# Because this is the first TRUE episode for an is_prior variable, its
+# value is changed to FALSE while its dates remain unchanged.
+#
+# The is_prior carry-forward logic then creates a TRUE episode covering
+# P1's later active pregnancy window: 2025-02-01 to 2025-05-31.
+#
+# P1's concept on 2025-01-15 is between the two pregnancy windows and
+# therefore creates no episode. P2 creates no episode because its
+# pregnancy window has value = FALSE.
+
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
@@ -25,6 +42,7 @@ testthat::test_that("uni_epi_1_generate_initial_spells_pregnancy carries PRIOR v
       variable_id = "VAR_A",
       concept_id = "CONCEPT_A",
       is_prior = TRUE,
+      excluding_pregnancies = NA, # required column for uni_epi_1_generate_initial_spells_pregnancy.sql
       start_look_back = 0L,
       end_look_back = -30L,
       stringsAsFactors = FALSE
