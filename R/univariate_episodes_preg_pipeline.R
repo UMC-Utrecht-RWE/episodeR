@@ -11,17 +11,13 @@
 ##' @param person_ids Optional vector of person_ids to use for batching.
 ##' If NULL, all distinct person_ids from concepts_table will be used.
 ##' If provided, must be a character or numeric vector of person_ids.
-##' @param concepts_table Character scalar naming the concepts source
-##' table or view containing person_id. Defaults to D3_CONCEPTS.
-##' @param concepts_table Character scalar naming the concepts source
-##' table/view. If different from D3_CONCEPTS, it is aliased as D3_CONCEPTS.
+##' @param concepts_table Character scalar naming the concepts source table/view containing person_id. Defaults to D3_CONCEPTS. If different, it is aliased as D3_CONCEPTS.
 ##' @param sql_dir Directory containing uni_epi_*.sql pipeline scripts.
 ##' @param start_study_date Study period start date.
 ##' @param end_date_missing_inclusion Study period end date.
 ##' @param output_hive_path Directory path where parquet hive output
 ##' partitions will be written after each full 5-step pipeline execution.
-##' @param batch_size Optional numeric batch size for person-level batching.
-##' If NULL or invalid, defaults to 50000.
+##' @param batch_size Numeric batch size for person-level batching. Defaults to 5000.
 ##' @param batch_column Name of Boolean column in study_variables
 ##' indicating whether each variable should be processed in batches.
 ##' @param missing_col Optional name of a column in study_variables whose
@@ -31,10 +27,8 @@
 ##' If \code{NULL} (default) the fill value is set to \code{NA} (NULL in
 ##' DuckDB) for every variable. If a column name is given and that column
 ##' is not present in \code{study_variables} an error is raised.
-##' @param is_prior Optional column in study_variables. Variables with
-##' value \code{TRUE} receive whole-window TRUE episodes in later
-##' pregnancy windows after the first window where the current pipeline
-##' already finds a TRUE event. If absent, it is treated as missing.
+##' Study variables may include an is_prior column. Variables with TRUE receive whole-window TRUE episodes in later
+##' pregnancy windows after the first window where the current pipeline already finds a TRUE event.
 ##' @param pregnancy_episode_windows Optional data frame with columns
 ##' \code{person_id}, \code{lmp_date}, \code{pregnancy_end_date}, and
 ##' \code{value}. This is written to DuckDB as table
@@ -309,16 +303,16 @@ univariate_episodes_preg_pipeline <- function(
   )
 
   if (nrow(sv_batch) > 0) {
+    if (is.null(person_ids)) {
+      all_persons_query <- sprintf(
+        "SELECT DISTINCT person_id FROM %s",
+        concepts_table
+      )
+      person_ids <- DBI::dbGetQuery(con, all_persons_query)$person_id
+    }
     total_persons <- length(person_ids)
 
     if (total_persons > 0) {
-      if (is.null(person_ids)) {
-        all_persons_query <- sprintf(
-          "SELECT DISTINCT person_id FROM %s",
-          concepts_table
-        )
-        person_ids <- DBI::dbGetQuery(con, all_persons_query)$person_id
-      }
       batch_ids <- split(
         person_ids,
         ceiling(seq_along(person_ids) / batch_size)

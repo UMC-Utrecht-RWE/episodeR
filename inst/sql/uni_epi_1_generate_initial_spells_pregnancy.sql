@@ -81,7 +81,7 @@ WITH
         SELECT DISTINCT
             c.person_id,
             sv.variable_id,
-            c.value,
+            'TRUE' AS value,
             c.date AS start_episode,
             pw.pregnancy_end_date AS end_episode
         FROM

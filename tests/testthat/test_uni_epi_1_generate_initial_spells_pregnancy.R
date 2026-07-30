@@ -80,7 +80,7 @@ testthat::test_that("uni_epi_1_generate_initial_spells_pregnancy carries PRIOR v
   expected <- data.table::as.data.table(data.frame(
     person_id = c("P1", "P1"),
     variable_id = c("VAR_A", "VAR_A"),
-    value = c(FALSE, TRUE),
+    value = c("FALSE", "TRUE"),
     start_episode = as.Date(c("2024-10-01", "2025-02-01")),
     end_episode = as.Date(c("2024-12-31", "2025-05-31")),
     stringsAsFactors = FALSE
