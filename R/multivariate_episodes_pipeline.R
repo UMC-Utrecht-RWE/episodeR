@@ -11,7 +11,10 @@
 ##' @param d3_univariate_episodes_path Directory path to the
 ##' D3_UNIVARIATE_EPISODES hive-partitioned parquet folder.
 ##' @param sql_dir Directory containing multi_epi_*.sql pipeline scripts.
-##' @param output_path Full file path for the output parquet file.
+##' @param output_path For an unbatched run, the full file path for the
+##' output parquet file. For a batched run, a directory path instead: it is
+##' created (any existing contents are cleared first) and populated with
+##' one hive-style parquet file per batch (batch_00001.parquet, ...).
 ##' @param person_ids Optional vector of person_ids. If NULL, derived from
 ##' distinct person_ids in the univariate episodes input.
 ##' @param batch_size Maximum number of persons per batch. Cohorts larger than
@@ -24,8 +27,9 @@
 ##' the target data type for each variable (e.g. BOOL, NUM, INT, CHAR, DATE).
 ##' Defaults to "data_type". Set to NULL to skip type conversion.
 ##'
-##' @return Invisibly returns NULL; writes D3_MULTIVARIATE_EPISODES parquet
-##' to output_path.
+##' @return Invisibly returns NULL. For an unbatched run, writes a single
+##' D3_MULTIVARIATE_EPISODES parquet file to output_path. For a batched
+##' run, writes one parquet file per batch into the output_path directory.
 #'
 #' @import data.table
 #' @export
@@ -230,10 +234,9 @@ multivariate_episodes_pipeline <- function(
   logger::log_info(paste("Number of batches:", length(batch_starts)))
 
   if (is_batched_run) {
-    batch_output_dir <- file.path(dirname(output_path), "D3_MULTIVARIATE_EPISODES")
-    if (dir.exists(batch_output_dir)) {
-      unlink(batch_output_dir, recursive = TRUE, force = TRUE)
-    }
+    # For a batched run, output_path IS the hive-style output directory
+    # itself - each batch is written as its own parquet file inside it.
+    batch_output_dir <- output_path
     dir.create(batch_output_dir, recursive = TRUE, showWarnings = FALSE)
   }
 
@@ -292,35 +295,7 @@ multivariate_episodes_pipeline <- function(
 
   logger::log_info("Batch processing complete")
 
-  if (is_batched_run) {
-    # Consolidate the per-batch parquet files into the single output_path
-    # file promised by this function's documented contract. DuckDB streams
-    # this COPY out-of-core, so it doesn't reintroduce the R-side memory
-    # pressure batching exists to avoid.
-    batch_glob_sql <- gsub(
-      "'",
-      "''",
-      file.path(batch_output_dir, "*.parquet"),
-      fixed = TRUE
-    )
-    output_path_sql <- gsub("'", "''", output_path, fixed = TRUE)
-    DBI::dbExecute(
-      con,
-      sprintf(
-        "COPY (
-            SELECT
-              person_id,
-              CAST(start_episode AS DATE) AS start_episode,
-              CAST(end_episode AS DATE) AS end_episode,
-              * EXCLUDE (person_id, start_episode, end_episode)
-           FROM read_parquet('%s')
-           )
-         TO '%s' (FORMAT 'parquet')",
-        batch_glob_sql,
-        output_path_sql
-      )
-    )
-  } else {
+  if (!is_batched_run) {
     DBI::dbExecute(
       con,
       sprintf(
