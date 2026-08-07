@@ -292,7 +292,35 @@ multivariate_episodes_pipeline <- function(
 
   logger::log_info("Batch processing complete")
 
-  if (!is_batched_run) {
+  if (is_batched_run) {
+    # Consolidate the per-batch parquet files into the single output_path
+    # file promised by this function's documented contract. DuckDB streams
+    # this COPY out-of-core, so it doesn't reintroduce the R-side memory
+    # pressure batching exists to avoid.
+    batch_glob_sql <- gsub(
+      "'",
+      "''",
+      file.path(batch_output_dir, "*.parquet"),
+      fixed = TRUE
+    )
+    output_path_sql <- gsub("'", "''", output_path, fixed = TRUE)
+    DBI::dbExecute(
+      con,
+      sprintf(
+        "COPY (
+            SELECT
+              person_id,
+              CAST(start_episode AS DATE) AS start_episode,
+              CAST(end_episode AS DATE) AS end_episode,
+              * EXCLUDE (person_id, start_episode, end_episode)
+           FROM read_parquet('%s')
+           )
+         TO '%s' (FORMAT 'parquet')",
+        batch_glob_sql,
+        output_path_sql
+      )
+    )
+  } else {
     DBI::dbExecute(
       con,
       sprintf(
