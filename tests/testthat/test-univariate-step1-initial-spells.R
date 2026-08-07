@@ -183,3 +183,100 @@ test_that("different persons and different variables never mix in dedup or MRR r
   expect_equal(nrow(out), 2)
   expect_equal(out$value, c("A", "B"))
 })
+
+test_that("10 persons exercise dedup, MRR cropping, drop/clamp, chain-merge, and multi-variable independence together", {
+  # One combined fixture standing in for the narrow single-behavior tests
+  # above, run across 10 person_ids at once - it catches cross-person
+  # bleed-over (e.g. accidental grouping by date/value alone instead of by
+  # person_id, variable_id) that isolated 1-2-person tests can't expose.
+  # VAR1/C1 and VAR2/C2 both use a look-back of 10 days
+  # (start_episode = date, end_episode = date + 10; per the header note,
+  # end_look_back=0 controls the start, start_look_back=10 controls the end).
+  con <- new_test_con()
+  concepts <- rbind(
+    # P1: single record -> one 11-day episode.
+    data.frame(person_id = "P1", concept_id = "C1", date = "2024-01-10", value = "A"),
+    # P2: same-day different values -> dedup collapses to 'unknown'.
+    data.frame(person_id = "P2", concept_id = "C1", date = c("2024-01-05", "2024-01-05"), value = c("A", "B")),
+    # P3: same-day identical values -> clean dedup, no 'unknown'.
+    data.frame(person_id = "P3", concept_id = "C1", date = c("2024-01-05", "2024-01-05"), value = c("A", "A")),
+    # P4: later record crops the earlier one's end (MRR resolution).
+    data.frame(person_id = "P4", concept_id = "C1", date = c("2024-01-01", "2024-01-05"), value = c("A", "B")),
+    # P5: window entirely before the study period -> dropped, 0 rows.
+    data.frame(person_id = "P5", concept_id = "C1", date = "2023-01-01", value = "A"),
+    # P6: window straddles study start -> clamped, not dropped.
+    data.frame(person_id = "P6", concept_id = "C1", date = "2023-12-28", value = "A"),
+    # P7: overlapping same-value records chain-merge into one episode.
+    data.frame(person_id = "P7", concept_id = "C1", date = c("2024-01-01", "2024-01-05"), value = c("A", "A")),
+    # P8: two different variables for the same person stay independent.
+    data.frame(person_id = "P8", concept_id = "C1", date = "2024-01-01", value = "A"),
+    data.frame(person_id = "P8", concept_id = "C2", date = "2024-01-01", value = "X"),
+    # P9: two far-apart records, same variable/value -> no merge (gap too large).
+    data.frame(person_id = "P9", concept_id = "C1", date = c("2024-01-01", "2024-02-01"), value = c("A", "A")),
+    # P10: independent sanity check, distinct date/value from P1.
+    data.frame(person_id = "P10", concept_id = "C1", date = "2024-02-15", value = "Z")
+  )
+  sv <- rbind(
+    sv_row("C1", "VAR1", start_look_back = 10, end_look_back = 0),
+    sv_row("C2", "VAR2", start_look_back = 10, end_look_back = 0)
+  )
+  persons <- paste0("P", 1:10)
+  seed_inputs(con, concepts, sv, persons = persons)
+
+  run_step(con, "uni_epi_1_generate_initial_spells.sql", list(
+    concept_id_list = "'C1', 'C2'",
+    start_study_date = "'2024-01-01'",
+    end_study_date = "'2024-03-01'"
+  ))
+
+  out <- data.table::as.data.table(DBI::dbGetQuery(
+    con,
+    "SELECT * FROM episodes_raw ORDER BY person_id, variable_id, start_episode"
+  ))
+
+  # P5 is fully dropped; everyone else contributes at least one row.
+  expect_setequal(unique(out$person_id), setdiff(persons, "P5"))
+  expect_equal(nrow(out), 12) # 1+1+1+2+0+1+1+2+2+1 across P1..P10
+
+  p1 <- out[person_id == "P1"]
+  expect_equal(nrow(p1), 1)
+  expect_equal(p1$value, "A")
+  expect_equal(as.Date(p1$start_episode), as.Date("2024-01-10"))
+  expect_equal(as.Date(p1$end_episode), as.Date("2024-01-20"))
+
+  expect_equal(out[person_id == "P2"]$value, "unknown")
+  expect_equal(out[person_id == "P3"]$value, "A")
+
+  p4 <- out[person_id == "P4"]
+  expect_equal(nrow(p4), 2)
+  expect_equal(p4$value, c("A", "B"))
+  expect_equal(as.Date(p4$end_episode[1]), as.Date("2024-01-04"))
+  expect_equal(as.Date(p4$start_episode[2]), as.Date("2024-01-05"))
+
+  expect_equal(nrow(out[person_id == "P5"]), 0)
+
+  p6 <- out[person_id == "P6"]
+  expect_equal(nrow(p6), 1)
+  expect_equal(as.Date(p6$start_episode), as.Date("2024-01-01"))
+  expect_equal(as.Date(p6$end_episode), as.Date("2024-01-07"))
+
+  p7 <- out[person_id == "P7"]
+  expect_equal(nrow(p7), 1)
+  expect_equal(as.Date(p7$start_episode), as.Date("2024-01-01"))
+  expect_equal(as.Date(p7$end_episode), as.Date("2024-01-15"))
+
+  p8 <- out[person_id == "P8"]
+  expect_equal(nrow(p8), 2)
+  expect_setequal(p8$variable_id, c("VAR1", "VAR2"))
+  expect_equal(p8$value[p8$variable_id == "VAR1"], "A")
+  expect_equal(p8$value[p8$variable_id == "VAR2"], "X")
+
+  p9 <- out[person_id == "P9"]
+  expect_equal(nrow(p9), 2)
+  expect_equal(as.Date(p9$start_episode), as.Date(c("2024-01-01", "2024-02-01")))
+
+  p10 <- out[person_id == "P10"]
+  expect_equal(nrow(p10), 1)
+  expect_equal(p10$value, "Z")
+  expect_equal(as.Date(p10$start_episode), as.Date("2024-02-15"))
+})
