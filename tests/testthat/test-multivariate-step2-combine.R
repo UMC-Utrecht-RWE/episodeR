@@ -158,3 +158,77 @@ test_that("KNOWN BEHAVIOUR: a genuine coverage gap (no EXPLODED row at all) with
   expect_equal(as.Date(out$start_episode), as.Date("2024-01-01"))
   expect_equal(as.Date(out$end_episode), as.Date("2024-01-06"))
 })
+
+test_that("10 persons exercise joining/dropping variables, real value changes, long chains, and multi-segment splits together", {
+  con <- new_test_con()
+
+  # Build EXPLODED rows for `person` on each day in `day_range` (1-based,
+  # within 2024-01) with all of `var_ids` active that day, in ascending
+  # order (see seed_exploded()'s ordering requirement).
+  day_rows <- function(person, day_range, var_ids) {
+    unlist(lapply(day_range, function(d) {
+      lapply(sort(var_ids), function(v) c(person, v, sprintf("2024-01-%02d", d)))
+    }), recursive = FALSE)
+  }
+
+  rows <- c(
+    day_rows("p1", 1:5, 1), # single variable throughout
+    day_rows("p2", 1:5, c(1, 2)), # two variables combined throughout
+    day_rows("p3", 1:3, c(1, 2)), day_rows("p3", 4:6, 1), # variable drops out
+    day_rows("p4", 1:3, 1), day_rows("p4", 4:6, c(1, 2)), # variable joins
+    day_rows("p5", 1:3, 1), day_rows("p5", 4:6, 3), # real value change (1 -> 3)
+    day_rows("p6", 1:9, 1), # long 9-day chain, one combination
+    day_rows("p7", 1:3, 1), day_rows("p7", 4:6, 2), day_rows("p7", 7:9, 1), # A-B-A
+    day_rows("p8", 1:5, 4), # mirrors p1's shape, independence sanity check
+    day_rows("p9", 1, 1), # single day only
+    day_rows("p10", 1:2, 1), day_rows("p10", 3:5, c(1, 2)), day_rows("p10", 6:7, 2) # 3-segment ramp up/down
+  )
+  seed_exploded(con, rows)
+  out <- run_combine_sql(con)
+
+  expect_equal(nrow(out), 17) # 1+1+2+2+2+1+3+1+1+3 across p1..p10
+  expect_setequal(unique(out$person_id), paste0("p", 1:10))
+
+  p1 <- out[out$person_id == "p1", ]
+  expect_equal(nrow(p1), 1)
+  expect_equal(p1$combination, "1")
+  expect_equal(as.Date(p1$end_episode), as.Date("2024-01-05"))
+
+  p2 <- out[out$person_id == "p2", ]
+  expect_equal(nrow(p2), 1)
+  expect_equal(p2$combination, "1;2")
+
+  # run_combine_sql() already orders its result by (person_id, start_episode).
+  p3 <- out[out$person_id == "p3", ]
+  expect_equal(nrow(p3), 2)
+  expect_equal(p3$combination, c("1;2", "1"))
+  expect_equal(as.Date(p3$start_episode), as.Date(c("2024-01-01", "2024-01-04")))
+
+  p4 <- out[out$person_id == "p4", ]
+  expect_equal(p4$combination, c("1", "1;2"))
+
+  p5 <- out[out$person_id == "p5", ]
+  expect_equal(nrow(p5), 2)
+  expect_equal(p5$combination, c("1", "3"))
+
+  p6 <- out[out$person_id == "p6", ]
+  expect_equal(nrow(p6), 1)
+  expect_equal(as.Date(p6$start_episode), as.Date("2024-01-01"))
+  expect_equal(as.Date(p6$end_episode), as.Date("2024-01-09"))
+
+  p7 <- out[out$person_id == "p7", ]
+  expect_equal(nrow(p7), 3)
+  expect_equal(p7$combination, c("1", "2", "1"))
+
+  p8 <- out[out$person_id == "p8", ]
+  expect_equal(nrow(p8), 1)
+  expect_equal(p8$combination, "4")
+
+  p9 <- out[out$person_id == "p9", ]
+  expect_equal(nrow(p9), 1)
+  expect_equal(as.Date(p9$start_episode), as.Date(p9$end_episode))
+
+  p10 <- out[out$person_id == "p10", ]
+  expect_equal(nrow(p10), 3)
+  expect_equal(p10$combination, c("1", "1;2", "2"))
+})

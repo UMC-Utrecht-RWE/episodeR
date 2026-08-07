@@ -195,6 +195,62 @@ test_that("different persons explode independently and never mix rows", {
   expect_equal(out$n, c(3, 2))
 })
 
+test_that("10 persons exercise batch/study-variable filtering, dictionary reuse, and concurrent/sequential overlap together", {
+  con <- new_test_con()
+  episodes <- rbind(
+    uni_epi_row("P1", "VAR1", "A", "2024-01-05", "2024-01-05"), # single day
+    uni_epi_row("P2", "VAR1", "A", "2024-01-01", "2024-01-05"), # 5-day run
+    uni_epi_row("P3", "VAR1", "A", "2024-01-01", "2024-01-05"), # concurrent overlap
+    uni_epi_row("P3", "VAR2", "B", "2024-01-03", "2024-01-07"),
+    uni_epi_row("P4", "VAR1", "A", "2024-01-01", "2024-01-03"), # sequential, no overlap
+    uni_epi_row("P4", "VAR2", "B", "2024-01-05", "2024-01-07"),
+    uni_epi_row("P5", "VAR1", NA_character_, "2024-01-01", "2024-01-03"), # NULL value
+    uni_epi_row("P6", "VAR1", "A", "2024-01-01", "2024-01-03"), # excluded via batch filter
+    uni_epi_row("P7", "VAR3", "A", "2024-01-01", "2024-01-03"), # excluded via study-variable filter
+    uni_epi_row("P8", "VAR1", "A", "2024-01-10", "2024-01-10"), # dictionary reuse with P1
+    uni_epi_row("P9", "VAR1", "A", "2024-01-01", "2024-01-10"), # variable joins partway through
+    uni_epi_row("P9", "VAR2", "B", "2024-01-05", "2024-01-08"),
+    uni_epi_row("P10", "VAR1", "A", "2024-01-01", "2024-01-10") # long 10-day episode
+  )
+  # P6 is deliberately left out of the batch; P7's only variable (VAR3) is
+  # deliberately left out of list_sv - both should end up with zero rows
+  # despite having rows in the source parquet.
+  run_explosion(
+    con,
+    episodes,
+    persons = setdiff(paste0("P", 1:10), "P6"),
+    variables = c("VAR1", "VAR2")
+  )
+
+  out <- data.table::as.data.table(DBI::dbGetQuery(con, "SELECT * FROM EXPLODED"))
+  dim_var <- data.table::as.data.table(DBI::dbGetQuery(con, "SELECT * FROM dim_var"))
+
+  expect_equal(nrow(out), 50) # 1+5+10+6+3+0+0+1+14+10 across P1..P10
+  expect_setequal(
+    unique(out$person_id),
+    c("P1", "P2", "P3", "P4", "P5", "P8", "P9", "P10")
+  )
+  expect_equal(nrow(out[person_id %in% c("P6", "P7")]), 0)
+
+  # Only (VAR1, "A"), (VAR1, NA), (VAR2, "B") are ever referenced by an
+  # included (person, variable) pair - VAR3 is excluded entirely via list_sv.
+  expect_equal(nrow(dim_var), 3)
+  expect_false("VAR3" %in% dim_var$variable_id)
+
+  # P1 and P8 both use (VAR1, "A") and must share one dictionary entry.
+  id_var1_a <- dim_var$int_var_id[dim_var$variable_id == "VAR1" & dim_var$value %in% "A"]
+  p1_ids <- unique(out[person_id == "P1"]$int_var_id)
+  p8_ids <- unique(out[person_id == "P8"]$int_var_id)
+  expect_equal(p1_ids, id_var1_a)
+  expect_equal(p8_ids, id_var1_a)
+
+  # P9: VAR2 only overlaps VAR1 on 01-05..01-08 (both active -> 2 rows/day);
+  # the remaining days of VAR1's 01-01..01-10 span have only 1 row/day.
+  p9_by_date <- out[person_id == "P9", .N, by = dates][order(dates)]
+  expect_equal(nrow(p9_by_date), 10)
+  expect_equal(p9_by_date$N, c(1, 1, 1, 1, 2, 2, 2, 2, 1, 1))
+})
+
 test_that("two concurrently-active variables for the same person both appear on every shared day", {
   con <- new_test_con()
   episodes <- rbind(
