@@ -429,3 +429,119 @@ testthat::test_that("multivariate_episodes_pipeline combines 3 simultaneous vari
   testthat::expect_equal(nrow(actual), 24)
   testthat::expect_equal(actual, expected)
 })
+
+testthat::test_that("multivariate_episodes_pipeline combines 10 simultaneous variables correctly (extreme width)", {
+  # Deliberately extreme: 10 variables active at once, an order of
+  # magnitude past the 2- and 3-variable tests above, to catch bugs that
+  # only show up at width (e.g. string_agg/dictionary ordering with many
+  # ids, a self-join condition that only checks a fixed number of
+  # variables, or dcast/pivot issues with many columns). As with the
+  # 3-variable test, uses reference_combine() (helper-blackbox.R) as the
+  # oracle rather than a hand-computed table - manually intersecting 10
+  # variables' worth of intervals would be impractical to verify by eye.
+  ep <- function(person, variable_id, value, start, end) {
+    data.frame(
+      person_id = person, variable_id = variable_id, value = value,
+      start_episode = as.Date(start), end_episode = as.Date(end),
+      stringsAsFactors = FALSE
+    )
+  }
+  vars <- paste0("VAR", 1:10)
+  rows <- list()
+
+  # P1: all 10 constant -> 1 row.
+  for (k in 1:10) {
+    rows[[length(rows) + 1]] <- ep("P1", vars[k], paste0("V", k), "2024-01-01", "2024-01-15")
+  }
+
+  # P2: all 10 change together at the same boundary (day 8) -> 2 rows.
+  for (k in 1:10) {
+    rows[[length(rows) + 1]] <- ep("P2", vars[k], paste0("A", k), "2024-01-01", "2024-01-07")
+    rows[[length(rows) + 1]] <- ep("P2", vars[k], paste0("B", k), "2024-01-08", "2024-01-15")
+  }
+
+  # P3: maximally staggered - VARk switches X{k}->Y{k} starting on day
+  # (k+1), so each of days 2..10 flips exactly one more variable ->
+  # 11 distinct combination segments (extreme fragmentation).
+  for (k in 1:10) {
+    switch_day <- k + 1
+    rows[[length(rows) + 1]] <- ep("P3", vars[k], paste0("X", k), "2024-01-01", sprintf("2024-01-%02d", switch_day - 1))
+    rows[[length(rows) + 1]] <- ep("P3", vars[k], paste0("Y", k), sprintf("2024-01-%02d", switch_day), "2024-01-15")
+  }
+
+  # P4: 9 variables constant, VAR5 toggles away and back to its original
+  # value (A5 -> B5 -> A5) -> 3 rows; the two "all-A" segments either
+  # side of the interruption must NOT false-merge, even at width 10.
+  for (k in 1:10) {
+    if (k != 5) {
+      rows[[length(rows) + 1]] <- ep("P4", vars[k], paste0("A", k), "2024-01-01", "2024-01-15")
+    } else {
+      rows[[length(rows) + 1]] <- ep("P4", "VAR5", "A5", "2024-01-01", "2024-01-05")
+      rows[[length(rows) + 1]] <- ep("P4", "VAR5", "B5", "2024-01-06", "2024-01-08")
+      rows[[length(rows) + 1]] <- ep("P4", "VAR5", "A5", "2024-01-09", "2024-01-15")
+    }
+  }
+
+  # P5: 5 variables with real constant values, 5 constant NULLs -> 1 row,
+  # NULL handling in a wide (10-column) combination.
+  for (k in 1:5) {
+    rows[[length(rows) + 1]] <- ep("P5", vars[k], paste0("R", k), "2024-01-01", "2024-01-15")
+  }
+  for (k in 6:10) {
+    rows[[length(rows) + 1]] <- ep("P5", vars[k], NA_character_, "2024-01-01", "2024-01-15")
+  }
+
+  uni_epi <- do.call(rbind, rows)
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  uni_hive_dir <- file.path(tempdir(), "multi_10var_uni_hive")
+  unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
+  on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
+  dir.create(uni_hive_dir, recursive = TRUE, showWarnings = FALSE)
+  DBI::dbWriteTable(con, "uni_epi_input", uni_epi, overwrite = TRUE)
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "COPY uni_epi_input TO '%s' (FORMAT PARQUET, PARTITION_BY (variable_id))",
+      uni_hive_dir
+    )
+  )
+
+  sv_meta <- data.table::data.table(
+    variable_id = vars,
+    batch = TRUE,
+    data_type = "CHAR"
+  )
+  output_dir <- file.path(tempdir(), "multi_10var_output")
+  unlink(output_dir, recursive = TRUE, force = TRUE)
+  on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  sql_dir <- system.file(package = "episodeR", "sql/")
+  multivariate_episodes_pipeline(
+    study_variables = sv_meta,
+    con = con,
+    d3_univariate_episodes_path = uni_hive_dir,
+    sql_dir = sql_dir,
+    output_path = output_dir,
+    person_ids = paste0("P", 1:5),
+    batch_column = "batch",
+    data_type_col = "data_type"
+  )
+
+  actual <- data.table::as.data.table(DBI::dbGetQuery(
+    con,
+    sprintf("SELECT * FROM read_parquet('%s')", file.path(output_dir, "*.parquet"))
+  ))
+  actual[, start_episode := as.Date(start_episode)]
+  actual[, end_episode := as.Date(end_episode)]
+  data.table::setorder(actual, person_id, start_episode)
+
+  expected <- reference_combine(uni_epi)
+  data.table::setcolorder(actual, names(expected))
+
+  testthat::expect_equal(nrow(actual), 18)
+  testthat::expect_equal(nrow(actual[actual$person_id == "P3", ]), 11) # the fragmentation case
+  testthat::expect_equal(actual, expected)
+})
