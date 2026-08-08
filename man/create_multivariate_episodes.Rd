@@ -24,14 +24,16 @@ variable_id and a Boolean batching column.}
 \item{d3_univariate_episodes_path}{Directory path to the
 D3_UNIVARIATE_EPISODES hive-partitioned parquet folder.}
 
-\item{output_path}{Full file path for the output parquet file.}
+\item{output_path}{Directory path for the output. Created (any existing
+contents cleared first) and populated with one parquet file per batch
+(batch_00001.parquet, ...) -- a single file when the batching safety net
+didn't trigger, several when it did.}
 
 \item{person_ids}{Optional vector of person_ids. If NULL, derived from
 distinct person_ids in the univariate episodes input.}
 
-\item{batch_size}{Maximum number of persons per batch. Cohorts larger than
-this are split into batches; smaller cohorts run as a single batch.
-Defaults to 7000.}
+\item{batch_size}{Maximum number of persons per batch before the
+batching safety net kicks in. Defaults to 7000.}
 
 \item{batch_column}{Name of a Boolean column in study_variables. Required
 (its presence is validated); when any value is TRUE batching is forced even
@@ -39,15 +41,27 @@ for a small cohort. batch_size is otherwise the driver.}
 
 \item{data_type_col}{Name of the column in study_variables that declares
 the target data type for each variable (e.g. BOOL, NUM, INT, CHAR, DATE).
-Defaults to "data_type". Set to NULL to skip type conversion.}
+Currently unused by this function; accepted for interface parity with
+\code{\link[=multivariate_episodes_pipeline]{multivariate_episodes_pipeline()}}.}
 }
 \value{
 Invisibly returns NULL; writes D3_MULTIVARIATE_EPISODES parquet
-to output_path.
+file(s) into the output_path directory.
 }
 \description{
 Processes D3_UNIVARIATE_EPISODES hive-partitioned parquet into a wide
-multivariate combination table (D3_MULTIVARIATE_EPISODES), processing
-persons in batches of batch_size and appending each batch into a single
-accumulator table before writing the final table to parquet once.
+multivariate combination table (D3_MULTIVARIATE_EPISODES) in a single
+fast SQL pass over the whole cohort.
 }
+\section{Batching is a safety net, not the default path}{
+
+The single-pass SQL below holds the whole cohort's working set in
+memory, which is fast but can exhaust memory for very large cohorts
+(see the scaling notes on \code{\link[=multivariate_episodes_pipeline]{multivariate_episodes_pipeline()}}). Batching
+exists only as a fallback for that case: it activates when a
+\code{study_variables[[batch_column]]} flag is TRUE or when the cohort
+exceeds \code{batch_size} persons, and is slower than the single-pass path
+because it re-reads the input per batch. Prefer sizing \code{batch_size} up
+(or not batching at all) whenever the cohort fits in memory.
+}
+
