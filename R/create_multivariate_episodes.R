@@ -28,7 +28,7 @@
 #'
 #' @import data.table
 #' @export
-multivariate_episodes_pipeline_2 <- function(
+create_multivariate_episodes <- function(
   study_variables,
   con,
   d3_univariate_episodes_path,
@@ -61,14 +61,12 @@ multivariate_episodes_pipeline_2 <- function(
     d3_univariate_episodes_path
   )
 
-  sql_initial <- picard::load_sql_query(
-    file.path(sql_dir, "multi_initial.sql"),
-    params = list(d3_univariate_episodes_path = uni_epi_param)
+  sql_initial <- glue::glue(
+    read_sql("multi_initial.sql"),
+    d3_univariate_episodes_path = uni_epi_param
   )
 
-  sql_build_episodes <- picard::load_sql_query(
-    file.path(sql_dir, "create_multivariate_episodes.sql")
-  )
+  sql_build_episodes <- read_sql("create_multivariate_episodes.sql")
 
   DBI::dbExecute(con, sql_initial)
   DBI::dbExecute(con, sql_build_episodes)

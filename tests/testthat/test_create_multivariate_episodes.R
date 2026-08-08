@@ -55,7 +55,7 @@ testthat::test_that("Multivariate episodes pipeline produces expected output", {
 
   person_ids <- unique(uni_epi$person_id)
 
-  multivariate_episodes_pipeline_2(
+  create_multivariate_episodes(
     study_variables = sv_meta,
     con = con,
     d3_univariate_episodes_path = uni_hive_dir,
@@ -116,7 +116,7 @@ testthat::test_that("multivariate_episodes_pipeline errors when batch column is 
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   testthat::expect_error(
-    multivariate_episodes_pipeline_2(
+    create_multivariate_episodes(
       study_variables = sv_meta,
       con = con,
       d3_univariate_episodes_path = file.path(tempdir(), "dummy_uni_hive"),
