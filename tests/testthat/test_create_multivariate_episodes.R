@@ -24,14 +24,14 @@ testthat::test_that("Multivariate episodes pipeline produces expected output", {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   uni_hive_dir <- file.path(tempdir(), "multi_test_uni_hive")
-  output_parquet <- file.path(
+  output_dir <- file.path(
     tempdir(),
-    "multi_test_D3_MULTIVARIATE_EPISODES.parquet"
+    "multi_test_D3_MULTIVARIATE_EPISODES"
   )
   unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
-  unlink(output_parquet, force = TRUE)
+  unlink(output_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
-  on.exit(unlink(output_parquet, force = TRUE), add = TRUE)
+  on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
   # Write univariate episodes CSV as hive-partitioned parquet
   uni_epi <- data.table::fread(file.path(
@@ -59,17 +59,14 @@ testthat::test_that("Multivariate episodes pipeline produces expected output", {
     study_variables = sv_meta,
     con = con,
     d3_univariate_episodes_path = uni_hive_dir,
-    output_path = output_parquet,
+    output_path = output_dir,
     person_ids = person_ids,
     batch_size = 100,
     batch_column = "batch"
   )
 
   # check date schema, throw error if timestamp
-  output_schema <- arrow::read_parquet(
-    output_parquet,
-    as_data_frame = FALSE
-  )$schema
+  output_schema <- arrow::open_dataset(output_dir)$schema
   testthat::expect_equal(
     output_schema$GetFieldByName("start_episode")$type$ToString(),
     "date32[day]"
@@ -83,7 +80,7 @@ testthat::test_that("Multivariate episodes pipeline produces expected output", {
   actual <- data.table::as.data.table(
     DBI::dbGetQuery(
       con,
-      sprintf("SELECT * FROM read_parquet('%s')", output_parquet)
+      sprintf("SELECT * FROM read_parquet('%s')", file.path(output_dir, "*.parquet"))
     )
   )
   actual[, start_episode := as.Date(start_episode)]
