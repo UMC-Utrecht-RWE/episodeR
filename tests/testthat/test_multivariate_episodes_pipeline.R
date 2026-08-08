@@ -111,16 +111,13 @@ testthat::test_that("batched run matches the single-batch expected output", {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   uni_hive_dir <- file.path(tempdir(), "multi_test_uni_hive_batched")
-  # output_parquet <- file.path(tempdir(), "multi_test_batched.parquet")
-  output_parquet <- file.path(
-    tempdir(),
-    "D3_MULTIVARIATE_EPISODES"
-    # "batch_00001.parquet"
-  )
+  # For a batched run, output_path is a directory populated with one
+  # parquet file per batch (see multivariate_episodes_pipeline()'s docs).
+  output_dir <- file.path(tempdir(), "multi_test_batched")
   unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
-  unlink(output_parquet, force = TRUE)
+  unlink(output_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
-  on.exit(unlink(output_parquet, force = TRUE), add = TRUE)
+  on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
   uni_epi <- data.table::fread(file.path(
     data_dir,
@@ -148,15 +145,25 @@ testthat::test_that("batched run matches the single-batch expected output", {
     con = con,
     d3_univariate_episodes_path = uni_hive_dir,
     sql_dir = sql_dir,
-    output_path = output_parquet,
+    output_path = output_dir,
     person_ids = person_ids,
     batch_size = 1,
     batch_column = "batch"
   )
 
+  batch_files <- list.files(
+    output_dir,
+    pattern = "\\.parquet$",
+    full.names = TRUE
+  )
+  expect_true(length(batch_files) > 1) # one file per person at batch_size = 1
+
   actual <- data.table::as.data.table(DBI::dbGetQuery(
     con,
-    sprintf("SELECT * FROM read_parquet('%s')", output_parquet)
+    sprintf(
+      "SELECT * FROM read_parquet('%s')",
+      file.path(output_dir, "*.parquet")
+    )
   ))
   actual[, start_episode := as.Date(start_episode)]
   actual[, end_episode := as.Date(end_episode)]
