@@ -5,6 +5,12 @@
 ##' persons in batches of batch_size and appending each batch into a single
 ##' accumulator table before writing the final table to parquet once.
 ##'
+##' @section Upcoming deprecation:
+##' `multivariate_episodes_pipeline()` will be deprecated in a future release
+##' in favour of [create_multivariate_episodes()], which reads the same SQL
+##' steps in a more efficient way. It is not yet deprecated, but new code
+##' should prefer [create_multivariate_episodes()].
+##'
 ##' @param study_variables Data frame with variable metadata including
 ##' variable_id and a Boolean batching column.
 ##' @param con DBI connection used to execute SQL pipeline steps.
@@ -44,6 +50,12 @@ multivariate_episodes_pipeline <- function(
   batch_column = "batch",
   data_type_col = "data_type"
 ) {
+  warning(
+    "multivariate_episodes_pipeline() will be deprecated in a future release ",
+    "in favour of create_multivariate_episodes(). Consider migrating.",
+    call. = FALSE
+  )
+
   if (missing(output_path) || !nzchar(output_path)) {
     stop("output_path must be provided and non-empty.")
   }
