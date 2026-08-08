@@ -55,15 +55,18 @@ testthat::test_that("Multivariate episodes pipeline produces expected output", {
 
   person_ids <- unique(uni_epi$person_id)
 
-  multivariate_episodes_pipeline(
-    study_variables = sv_meta,
-    con = con,
-    d3_univariate_episodes_path = uni_hive_dir,
-    sql_dir = sql_dir,
-    output_path = output_parquet,
-    person_ids = person_ids,
-    batch_size = 100,
-    batch_column = "batch"
+  testthat::expect_warning(
+    multivariate_episodes_pipeline(
+      study_variables = sv_meta,
+      con = con,
+      d3_univariate_episodes_path = uni_hive_dir,
+      sql_dir = sql_dir,
+      output_path = output_parquet,
+      person_ids = person_ids,
+      batch_size = 100,
+      batch_column = "batch"
+    ),
+    "will be deprecated"
   )
 
   # check date schema, throw error if timestamp
@@ -140,15 +143,18 @@ testthat::test_that("batched run matches the single-batch expected output", {
   person_ids <- unique(uni_epi$person_id)
 
   # batch_size = 1 forces one batch per person, exercising the streamed union
-  multivariate_episodes_pipeline(
-    study_variables = sv_meta,
-    con = con,
-    d3_univariate_episodes_path = uni_hive_dir,
-    sql_dir = sql_dir,
-    output_path = output_dir,
-    person_ids = person_ids,
-    batch_size = 1,
-    batch_column = "batch"
+  testthat::expect_warning(
+    multivariate_episodes_pipeline(
+      study_variables = sv_meta,
+      con = con,
+      d3_univariate_episodes_path = uni_hive_dir,
+      sql_dir = sql_dir,
+      output_path = output_dir,
+      person_ids = person_ids,
+      batch_size = 1,
+      batch_column = "batch"
+    ),
+    "will be deprecated"
   )
 
   batch_files <- list.files(
@@ -193,14 +199,17 @@ testthat::test_that("multivariate_episodes_pipeline errors when batch column is 
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  testthat::expect_error(
-    multivariate_episodes_pipeline(
-      study_variables = sv_meta,
-      con = con,
-      d3_univariate_episodes_path = file.path(tempdir(), "dummy_uni_hive"),
-      sql_dir = sql_dir,
-      output_path = file.path(tempdir(), "dummy_multi.parquet")
+  testthat::expect_warning(
+    testthat::expect_error(
+      multivariate_episodes_pipeline(
+        study_variables = sv_meta,
+        con = con,
+        d3_univariate_episodes_path = file.path(tempdir(), "dummy_uni_hive"),
+        sql_dir = sql_dir,
+        output_path = file.path(tempdir(), "dummy_multi.parquet")
+      ),
+      "must include a Boolean"
     ),
-    "must include a Boolean"
+    "will be deprecated"
   )
 })
