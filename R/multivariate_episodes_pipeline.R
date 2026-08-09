@@ -234,9 +234,10 @@ multivariate_episodes_pipeline <- function(
   logger::log_info(paste("Number of batches:", length(batch_starts)))
 
   if (is_batched_run) {
-    # For a batched run, output_path IS the hive-style output directory
-    # itself - each batch is written as its own parquet file inside it.
-    batch_output_dir <- output_path
+    batch_output_dir <- file.path(output_path)
+    if (dir.exists(batch_output_dir)) {
+      unlink(batch_output_dir, recursive = TRUE, force = TRUE)
+    }
     dir.create(batch_output_dir, recursive = TRUE, showWarnings = FALSE)
   }
 
@@ -285,7 +286,7 @@ multivariate_episodes_pipeline <- function(
     } else {
       DBI::dbWriteTable(
         con,
-        "D3_MULTIVARIATE_EPISODES",
+        "D3_MULTIVARIATE_EPISODES", #! Flagging hardcoded table name
         batch_episodes,
         append = TRUE
       )
