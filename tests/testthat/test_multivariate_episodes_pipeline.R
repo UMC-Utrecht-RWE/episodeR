@@ -112,10 +112,15 @@ testthat::test_that("batched run matches the single-batch expected output", {
 
   uni_hive_dir <- file.path(tempdir(), "multi_test_uni_hive_batched")
   output_parquet <- file.path(tempdir(), "multi_test_batched.parquet")
+  # When batching, the pipeline writes one parquet file per batch into this
+  # directory instead of writing a single file at output_path.
+  batch_output_dir <- file.path(dirname(output_parquet), "D3_MULTIVARIATE_EPISODES")
   unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
   unlink(output_parquet, force = TRUE)
+  unlink(batch_output_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
   on.exit(unlink(output_parquet, force = TRUE), add = TRUE)
+  on.exit(unlink(batch_output_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
   uni_epi <- data.table::fread(file.path(
     data_dir,
@@ -151,7 +156,10 @@ testthat::test_that("batched run matches the single-batch expected output", {
 
   actual <- data.table::as.data.table(DBI::dbGetQuery(
     con,
-    sprintf("SELECT * FROM read_parquet('%s')", output_parquet)
+    sprintf(
+      "SELECT * FROM read_parquet('%s/*.parquet')",
+      batch_output_dir
+    )
   ))
   actual[, start_episode := as.Date(start_episode)]
   actual[, end_episode := as.Date(end_episode)]
