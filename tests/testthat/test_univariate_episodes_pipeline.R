@@ -36,17 +36,20 @@ testthat::test_that("Univariate episodes pipeline produces expected output", {
     overwrite = TRUE
   )
 
-  univariate_episodes_pipeline(
-    study_variables = sv_meta,
-    con = con,
-    person_ids = unique(D3_SPELLS$person_id),
-    sql_dir = sql_dir,
-    start_study_date = start_study_date,
-    end_date_missing_inclusion = end_date_missing_inclusion,
-    output_hive_path = hive_dir,
-    batch_size = 100,
-    batch_column = "batch",
-    missing_col = "missing_set_to"
+  testthat::expect_warning(
+    univariate_episodes_pipeline(
+      study_variables = sv_meta,
+      con = con,
+      person_ids = unique(D3_SPELLS$person_id),
+      sql_dir = sql_dir,
+      start_study_date = start_study_date,
+      end_date_missing_inclusion = end_date_missing_inclusion,
+      output_hive_path = hive_dir,
+      batch_size = 100,
+      batch_column = "batch",
+      missing_col = "missing_set_to"
+    ),
+    "will be deprecated"
   )
 
   # Retrieve and compare to expected output
@@ -114,17 +117,20 @@ testthat::test_that("Univariate episodes pipeline trims concept timestamps to da
     overwrite = TRUE
   )
 
-  episodeR::univariate_episodes_pipeline(
-    study_variables = sv_meta,
-    con = con,
-    person_ids = unique(D3_SPELLS$person_id),
-    sql_dir = sql_dir,
-    start_study_date = start_study_date,
-    end_date_missing_inclusion = end_date_missing_inclusion,
-    output_hive_path = hive_dir,
-    batch_size = 100,
-    batch_column = "batch",
-    missing_col = "missing_set_to"
+  testthat::expect_warning(
+    episodeR::univariate_episodes_pipeline(
+      study_variables = sv_meta,
+      con = con,
+      person_ids = unique(D3_SPELLS$person_id),
+      sql_dir = sql_dir,
+      start_study_date = start_study_date,
+      end_date_missing_inclusion = end_date_missing_inclusion,
+      output_hive_path = hive_dir,
+      batch_size = 100,
+      batch_column = "batch",
+      missing_col = "missing_set_to"
+    ),
+    "will be deprecated"
   )
 
 # check date schema, throw error if timestamp
@@ -187,18 +193,21 @@ testthat::test_that("univariate_episodes_pipeline errors when batch column is mi
     overwrite = TRUE
   )
 
-  testthat::expect_error(
-    univariate_episodes_pipeline(
-      study_variables = sv_meta,
-      con = con,
-      sql_dir = sql_dir,
-      start_study_date = config_test$univariate_episodes$start_study_date,
-      end_date_missing_inclusion = config_test$univariate_episodes$end_study_date,
-      output_hive_path = file.path(
-        tempdir(),
-        "univariate_episodes_hive_missing_batch"
-      )
+  testthat::expect_warning(
+    testthat::expect_error(
+      univariate_episodes_pipeline(
+        study_variables = sv_meta,
+        con = con,
+        sql_dir = sql_dir,
+        start_study_date = config_test$univariate_episodes$start_study_date,
+        end_date_missing_inclusion = config_test$univariate_episodes$end_study_date,
+        output_hive_path = file.path(
+          tempdir(),
+          "univariate_episodes_hive_missing_batch"
+        )
+      ),
+      "must include a Boolean"
     ),
-    "must include a Boolean"
+    "will be deprecated"
   )
 })
