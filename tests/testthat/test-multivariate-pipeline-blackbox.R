@@ -196,16 +196,19 @@ testthat::test_that("multivariate_episodes_pipeline round-trips correctly on rea
   unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
-  univariate_episodes_pipeline(
-    study_variables = sv_meta,
-    con = con,
-    person_ids = persons,
-    sql_dir = sql_dir,
-    start_study_date = "2024-01-01",
-    end_date_missing_inclusion = "2024-01-31",
-    output_hive_path = uni_hive_dir,
-    batch_column = "batch",
-    missing_col = "missing_set_to"
+  testthat::expect_warning(
+    univariate_episodes_pipeline(
+      study_variables = sv_meta,
+      con = con,
+      person_ids = persons,
+      sql_dir = sql_dir,
+      start_study_date = "2024-01-01",
+      end_date_missing_inclusion = "2024-01-31",
+      output_hive_path = uni_hive_dir,
+      batch_column = "batch",
+      missing_col = "missing_set_to"
+    ),
+    "will be deprecated"
   )
 
   actual_uni <- data.table::as.data.table(DBI::dbGetQuery(

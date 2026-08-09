@@ -42,16 +42,19 @@ testthat::test_that("univariate_episodes_pipeline produces correct output across
   unlink(hive_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
-  univariate_episodes_pipeline(
-    study_variables = sv_meta,
-    con = con,
-    person_ids = persons,
-    sql_dir = sql_dir,
-    start_study_date = "2024-01-01",
-    end_date_missing_inclusion = "2024-01-31",
-    output_hive_path = hive_dir,
-    batch_column = "batch",
-    missing_col = "missing_set_to"
+  testthat::expect_warning(
+    univariate_episodes_pipeline(
+      study_variables = sv_meta,
+      con = con,
+      person_ids = persons,
+      sql_dir = sql_dir,
+      start_study_date = "2024-01-01",
+      end_date_missing_inclusion = "2024-01-31",
+      output_hive_path = hive_dir,
+      batch_column = "batch",
+      missing_col = "missing_set_to"
+    ),
+    "will be deprecated"
   )
 
   actual <- data.table::as.data.table(DBI::dbGetQuery(
@@ -173,7 +176,10 @@ testthat::test_that("univariate_episodes_pipeline produces identical output whet
       output_hive_path = hive_dir, batch_column = "batch", missing_col = "missing_set_to"
     )
     if (!is.null(batch_size)) args$batch_size <- batch_size
-    do.call(univariate_episodes_pipeline, args)
+    testthat::expect_warning(
+      do.call(univariate_episodes_pipeline, args),
+      "will be deprecated"
+    )
 
     out <- data.table::as.data.table(DBI::dbGetQuery(
       con,
