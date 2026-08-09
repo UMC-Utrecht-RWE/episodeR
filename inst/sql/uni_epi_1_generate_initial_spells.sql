@@ -11,14 +11,6 @@
 --   trimmed           -> clamp to [start_study_date, end_study_date] + filter degenerate
 --   episodes_raw      -> chain-merge same-value adjacent/overlapping trimmed intervals
 
--- Filtering to concept_id_list here (rather than only later in MCE_SV)
--- shrinks the dedup GROUP BY to just the concept_ids this call actually
--- needs. Safe because the GROUP BY is per concept_id already, so rows for
--- other concept_ids can never affect a kept concept_id's dedup result.
--- This call reruns per pipeline invocation (once for non-batched
--- variables, once for batched, and once per person-batch when batching is
--- active), so trimming its input matters when D3_CONCEPTS holds many
--- concept types but only a few are relevant to a given call.
 CREATE OR REPLACE TABLE concept_dedup AS
 WITH concepts_dated AS (
   SELECT
@@ -27,7 +19,6 @@ WITH concepts_dated AS (
     CAST(c.date AS DATE) AS date,
     c.value
   FROM D3_CONCEPTS c
-  WHERE c.concept_id IN ({concept_id_list})
 )
 SELECT
   c.person_id,
@@ -52,6 +43,7 @@ MCE_SV AS (
     c.date + CAST(sv.start_look_back AS INTEGER) AS end_episode
   FROM concept_dedup c
   JOIN study_variables sv ON c.concept_id = sv.concept_id
+  WHERE c.concept_id IN ({concept_id_list})
 ),
 ranked_dates AS (
   SELECT *,
@@ -104,49 +96,35 @@ trimmed AS (
 )
 SELECT person_id, variable_id, value, start_episode, end_episode FROM trimmed;
 
--- Chain-merge same-value overlapping/adjacent intervals within
--- (person_id, variable_id, value) using a gaps-and-islands window-function
--- merge instead of a self-join + NOT EXISTS (which is O(n^2) per
--- partition, the same class of query multi_epi_3_mergestatus.sql's
--- sweep-line rewrite replaced on the multivariate side).
--- running_max_end tracks the widest end_episode seen so far in start order,
--- so a nested interval (e.g. [1,10] followed by [2,3]) still merges
--- correctly instead of only comparing against the immediately preceding
--- row. A new island starts whenever the current start is more than 1 day
--- past that running max; PARTITION BY value groups NULL values together
--- natively, so no extra NULL-equality handling is needed.
+-- Materialise trimmed before chain-merge to avoid DuckDB CTE re-evaluation inconsistencies
+-- when trimmed is referenced multiple times in correlated subqueries.
 CREATE OR REPLACE TABLE episodes_raw AS
-WITH ordered AS (
-  SELECT *,
-    MAX(end_episode) OVER (
-      PARTITION BY person_id, variable_id, value
-      ORDER BY start_episode, end_episode
-      ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-    ) AS running_max_end
-  FROM trimmed_episodes
-),
-flagged AS (
-  SELECT *,
-    CASE
-      WHEN running_max_end IS NULL OR start_episode > running_max_end + 1
-      THEN 1 ELSE 0
-    END AS new_island
-  FROM ordered
-),
-grouped AS (
-  SELECT *,
-    SUM(new_island) OVER (
-      PARTITION BY person_id, variable_id, value
-      ORDER BY start_episode, end_episode
-      ROWS UNBOUNDED PRECEDING
-    ) AS island
-  FROM flagged
-)
 SELECT
-  person_id,
-  variable_id,
-  value,
-  MIN(start_episode) AS start_episode,
-  MAX(end_episode)   AS end_episode
-FROM grouped
-GROUP BY person_id, variable_id, value, island;
+  s1.person_id,
+  s1.variable_id,
+  s1.value,
+  s1.start_episode,
+  MIN(t1.end_episode) AS end_episode
+FROM trimmed_episodes s1
+INNER JOIN trimmed_episodes t1
+  ON  s1.start_episode         <= t1.end_episode
+  AND s1.person_id      = t1.person_id
+  AND s1.variable_id    = t1.variable_id
+  AND (s1.value = t1.value OR (s1.value IS NULL AND t1.value IS NULL))
+  AND NOT EXISTS (
+    SELECT 1 FROM trimmed_episodes t2
+    WHERE t1.end_episode   >= t2.start_episode - 1
+      AND t1.end_episode   <  t2.end_episode
+      AND t1.person_id    = t2.person_id
+      AND t1.variable_id  = t2.variable_id
+      AND (t1.value = t2.value OR (t1.value IS NULL AND t2.value IS NULL))
+  )
+WHERE NOT EXISTS (
+  SELECT 1 FROM trimmed_episodes s2
+  WHERE s1.start_episode  > s2.start_episode
+    AND s1.start_episode <= s2.end_episode + 1
+    AND s1.person_id    = s2.person_id
+    AND s1.variable_id  = s2.variable_id
+    AND (s1.value = s2.value OR (s1.value IS NULL AND s2.value IS NULL))
+)
+GROUP BY s1.person_id, s1.variable_id, s1.value, s1.start_episode;

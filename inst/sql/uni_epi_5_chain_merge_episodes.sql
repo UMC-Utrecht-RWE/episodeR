@@ -4,42 +4,36 @@
 -- Input: episodes_complete
 -- Output: D3_UNIVARIATE_EPISODES
 
--- Uses the same gaps-and-islands window-function merge as uni_epi_1's
--- episodes_raw step (see comment there) instead of a self-join + NOT
--- EXISTS, which is O(n^2) per (person_id, variable_id, value) partition.
 CREATE OR REPLACE TABLE D3_UNIVARIATE_EPISODES AS
-WITH ordered AS (
-  SELECT *,
-    MAX(end_episode) OVER (
-      PARTITION BY person_id, variable_id, value
-      ORDER BY start_episode, end_episode
-      ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-    ) AS running_max_end
-  FROM episodes_complete
-),
-flagged AS (
-  SELECT *,
-    CASE
-      WHEN running_max_end IS NULL OR start_episode > running_max_end + 1
-      THEN 1 ELSE 0
-    END AS new_island
-  FROM ordered
-),
-grouped AS (
-  SELECT *,
-    SUM(new_island) OVER (
-      PARTITION BY person_id, variable_id, value
-      ORDER BY start_episode, end_episode
-      ROWS UNBOUNDED PRECEDING
-    ) AS island
-  FROM flagged
-)
 SELECT
-  person_id,
-  variable_id,
-  value,
-  MIN(start_episode) AS start_episode,
-  MAX(end_episode)   AS end_episode
-FROM grouped
-GROUP BY person_id, variable_id, value, island
-ORDER BY person_id, variable_id, start_episode;
+  s1.person_id,
+  s1.variable_id,
+  s1.value,
+  s1.start_episode,
+  MIN(t1.end_episode) AS end_episode
+FROM episodes_complete s1
+INNER JOIN episodes_complete t1
+  ON  s1.start_episode <= t1.end_episode
+  AND s1.person_id   = t1.person_id
+  AND s1.variable_id = t1.variable_id
+  AND (s1.value = t1.value OR (s1.value IS NULL AND t1.value IS NULL))
+  AND NOT EXISTS (
+    -- t1 is not the true end of the chain: there is a t2 that extends further
+    SELECT 1 FROM episodes_complete t2
+    WHERE t1.end_episode   >= t2.start_episode - 1
+      AND t1.end_episode   <  t2.end_episode
+      AND t1.person_id   = t2.person_id
+      AND t1.variable_id = t2.variable_id
+      AND (t1.value = t2.value OR (t1.value IS NULL AND t2.value IS NULL))
+  )
+WHERE NOT EXISTS (
+  -- s1 is not a chain start: there is an earlier s2 with the same value that overlaps/touches s1
+  SELECT 1 FROM episodes_complete s2
+  WHERE s1.start_episode  > s2.start_episode
+    AND s1.start_episode <= s2.end_episode + 1
+    AND s1.person_id    = s2.person_id
+    AND s1.variable_id  = s2.variable_id
+    AND (s1.value = s2.value OR (s1.value IS NULL AND s2.value IS NULL))
+)
+GROUP BY s1.person_id, s1.variable_id, s1.value, s1.start_episode
+ORDER BY s1.person_id, s1.variable_id, s1.start_episode;
