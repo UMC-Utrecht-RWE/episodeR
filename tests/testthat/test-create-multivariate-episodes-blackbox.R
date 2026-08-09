@@ -579,3 +579,88 @@ testthat::test_that("create_multivariate_episodes: batch_size threshold alone tr
   ))
   testthat::expect_equal(nrow(actual), 6) # one constant-combination episode per person
 })
+
+testthat::test_that("create_multivariate_episodes only processes variable_id(s) declared in study_variables", {
+  # Regression test: multivariate_episodes_pipeline() builds a list_sv
+  # table from study_variables$variable_id and filters multi_epi_1_explosion.sql
+  # to it (R/multivariate_episodes_pipeline.R, multi_epi_1_explosion.sql).
+  # create_multivariate_episodes() currently has no equivalent filter --
+  # multi_initial.sql reads read_parquet({d3_univariate_episodes_path}) with
+  # no variable_id restriction at all (its list_sv join is commented out).
+  # study_variables here only declares VAR1/VAR2; VAR3 is present in the
+  # univariate input but undeclared, and changes value partway through the
+  # study period for P1. An undeclared variable leaking in doesn't just add
+  # a stray output column -- since combination/episode boundaries are
+  # driven by every active variable the sweep-line SQL sees, VAR3's change
+  # would incorrectly fragment P1's episode into two.
+  ep <- function(person, variable_id, value, start, end) {
+    data.frame(
+      person_id = person, variable_id = variable_id, value = value,
+      start_episode = as.Date(start), end_episode = as.Date(end),
+      stringsAsFactors = FALSE
+    )
+  }
+  uni_epi <- rbind(
+    ep("P1", "VAR1", "A", "2024-01-01", "2024-01-10"),
+    ep("P1", "VAR2", "X", "2024-01-01", "2024-01-10"),
+    ep("P1", "VAR3", "M", "2024-01-01", "2024-01-05"), ep("P1", "VAR3", "N", "2024-01-06", "2024-01-10"),
+    ep("P2", "VAR1", "A", "2024-01-01", "2024-01-04"), ep("P2", "VAR1", "B", "2024-01-05", "2024-01-10"),
+    ep("P2", "VAR2", "X", "2024-01-01", "2024-01-10"),
+    ep("P2", "VAR3", "M", "2024-01-01", "2024-01-10")
+  )
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  uni_hive_dir <- file.path(tempdir(), "create_multi_undeclared_var_uni_hive")
+  unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
+  on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
+  dir.create(uni_hive_dir, recursive = TRUE, showWarnings = FALSE)
+  DBI::dbWriteTable(con, "uni_epi_input", uni_epi, overwrite = TRUE)
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "COPY uni_epi_input TO '%s' (FORMAT PARQUET, PARTITION_BY (variable_id))",
+      uni_hive_dir
+    )
+  )
+
+  # Only VAR1/VAR2 declared -- VAR3 must not affect output at all.
+  sv_meta <- data.table::data.table(
+    variable_id = c("VAR1", "VAR2"),
+    batch = FALSE,
+    data_type = "CHAR"
+  )
+  output_dir <- file.path(tempdir(), "create_multi_undeclared_var_out")
+  unlink(output_dir, recursive = TRUE, force = TRUE)
+  on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  create_multivariate_episodes(
+    study_variables = sv_meta,
+    con = con,
+    d3_univariate_episodes_path = uni_hive_dir,
+    output_path = output_dir,
+    person_ids = c("P1", "P2"),
+    batch_column = "batch",
+    data_type_col = "data_type"
+  )
+
+  actual <- data.table::as.data.table(DBI::dbGetQuery(
+    con,
+    sprintf("SELECT * FROM read_parquet('%s')", file.path(output_dir, "*.parquet"))
+  ))
+  actual[, start_episode := as.Date(start_episode)]
+  actual[, end_episode := as.Date(end_episode)]
+  data.table::setorder(actual, person_id, start_episode)
+
+  testthat::expect_false("VAR3" %in% names(actual))
+
+  expected <- reference_combine(uni_epi[uni_epi$variable_id %in% c("VAR1", "VAR2"), ])
+  data.table::setcolorder(actual, names(expected))
+
+  # P1 must stay a single episode -- VAR3's undeclared mid-period change
+  # must not fragment it.
+  testthat::expect_equal(nrow(actual[actual$person_id == "P1", ]), 1)
+  testthat::expect_equal(nrow(actual), 3)
+  testthat::expect_equal(actual, expected)
+})
