@@ -8,11 +8,9 @@ DROP TABLE IF EXISTS dim_var;
 DROP TABLE IF EXISTS new_variables_ids;
 
 CREATE OR REPLACE TABLE initial AS (
-    SELECT *
+    SELECT episodes.*
     FROM read_parquet({d3_univariate_episodes_path}) episodes
-    -- INNER JOIN i_batch_persons ibp
-    --     ON episodes.person_id = ibp.person_id
-    -- INNER JOIN list_sv lsv ON episodes.variable_id = lsv.variable_id
+    INNER JOIN list_sv lsv ON episodes.variable_id = lsv.variable_id
 );
 
 CREATE TABLE dim_var AS (

@@ -82,8 +82,6 @@ FROM grouped g
 JOIN person_bounds pb ON g.person_id = pb.person_id
 GROUP BY g.person_id, g.combination, g.grp, pb.max_real_day;
 
-FROM multivariate_episode;
-
 CREATE OR REPLACE TABLE dim_combination AS
 SELECT 
     combination,

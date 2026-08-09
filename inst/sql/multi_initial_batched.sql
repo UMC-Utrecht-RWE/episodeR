@@ -3,9 +3,10 @@
 -- cohorts too large to fit in memory in one pass -- not the default code
 -- path). Filters the univariate episodes read down to i_batch_persons,
 -- written per-batch by the caller, so each batch's working set (dim_var,
--- new_variables_ids) only covers that batch's persons. Kept as a separate
--- file rather than modifying multi_initial.sql so the default single-pass
--- path is completely unaffected.
+-- new_variables_ids) only covers that batch's persons; also filters to
+-- list_sv (built from study_variables$variable_id), same as multi_initial.sql.
+-- Kept as a separate file rather than modifying multi_initial.sql so the
+-- default single-pass path is completely unaffected.
 
 DROP TABLE IF EXISTS dim_var;
 
@@ -16,6 +17,7 @@ CREATE OR REPLACE TABLE initial AS (
     FROM read_parquet({d3_univariate_episodes_path}) episodes
     INNER JOIN i_batch_persons ibp
         ON episodes.person_id = ibp.person_id
+    INNER JOIN list_sv lsv ON episodes.variable_id = lsv.variable_id
 );
 
 CREATE TABLE dim_var AS (
