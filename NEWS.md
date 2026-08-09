@@ -1,3 +1,9 @@
+# episodeR 0.0.3
+
+- This version is to be used to provide a stable release where the package versions in DESCRIPTION and release will match
+- Adjusted the test to match the developments happened in v0.0.2.1
+- Updates to renv for using updated package versions
+
 # episodeR 0.0.2.1
 
 - Fixed bug with hardcoded output directory in multivariate episodes.
