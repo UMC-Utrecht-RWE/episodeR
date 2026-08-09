@@ -64,3 +64,11 @@ D3_UNIVARIATE_EPISODES in the provided DuckDB connection.
 Variables flagged for batching in study_variables are processed
 in person_id batches; remaining variables are processed in one pass.
 }
+\section{Upcoming deprecation}{
+
+\code{univariate_episodes_pipeline()} will be deprecated in a future release
+in favour of \code{\link[=create_univariate_episodes]{create_univariate_episodes()}}, which runs the same SQL
+steps in a more efficient way. It is not yet deprecated, but new code
+should prefer \code{\link[=create_univariate_episodes]{create_univariate_episodes()}}.
+}
+

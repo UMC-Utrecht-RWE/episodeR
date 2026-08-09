@@ -5,6 +5,12 @@
 ##' Variables flagged for batching in study_variables are processed
 ##' in person_id batches; remaining variables are processed in one pass.
 ##'
+##' @section Upcoming deprecation:
+##' `univariate_episodes_pipeline()` will be deprecated in a future release
+##' in favour of [create_univariate_episodes()], which runs the same SQL
+##' steps in a more efficient way. It is not yet deprecated, but new code
+##' should prefer [create_univariate_episodes()].
+##'
 ##' @param study_variables Data frame with variable metadata including
 ##' concept_id, variable_id, and a Boolean batching column.
 ##' @param con DBI connection used to execute SQL pipeline steps.
@@ -49,6 +55,12 @@ univariate_episodes_pipeline <- function(
     batch_size = 5000L,
     batch_column = "batch",
     missing_col = NULL) {
+  warning(
+    "univariate_episodes_pipeline() will be deprecated in a future release ",
+    "in favour of create_univariate_episodes(). Consider migrating.",
+    call. = FALSE
+  )
+
   if (missing(output_hive_path) || !nzchar(output_hive_path)) {
     stop("output_hive_path must be provided and non-empty.")
   }
