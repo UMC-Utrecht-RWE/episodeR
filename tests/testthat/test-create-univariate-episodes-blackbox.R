@@ -32,7 +32,6 @@ testthat::test_that("create_univariate_episodes produces correct output across 1
     data.frame(concept_id = "C2", variable_id = "VAR2", start_look_back = 5, end_look_back = 0, missing_set_to = "MISSING_2", batch = FALSE, stringsAsFactors = FALSE)
   )
   persons <- paste0("P", 1:10)
-  sql_dir <- system.file(package = "episodeR", "sql/")
 
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
@@ -46,7 +45,6 @@ testthat::test_that("create_univariate_episodes produces correct output across 1
     study_variables = sv_meta,
     con = con,
     person_ids = persons,
-    sql_dir = sql_dir,
     start_study_date = "2024-01-01",
     end_date_missing_inclusion = "2024-01-31",
     output_hive_path = hive_dir,
@@ -153,7 +151,6 @@ testthat::test_that("create_univariate_episodes produces identical output whethe
     data.frame(person_id = "P9", concept_id = "C2", date = "2024-01-15", value = "Z")
   )
   persons <- paste0("P", 1:10)
-  sql_dir <- system.file(package = "episodeR", "sql/")
 
   run_it <- function(batch_flag, batch_size = NULL) {
     sv_meta <- rbind(
@@ -168,7 +165,7 @@ testthat::test_that("create_univariate_episodes produces identical output whethe
     on.exit(unlink(hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
     args <- list(
-      study_variables = sv_meta, con = con, person_ids = persons, sql_dir = sql_dir,
+      study_variables = sv_meta, con = con, person_ids = persons,
       start_study_date = "2024-01-01", end_date_missing_inclusion = "2024-01-31",
       output_hive_path = hive_dir, batch_column = "batch", missing_col = "missing_set_to"
     )
@@ -214,7 +211,6 @@ testthat::test_that("create_univariate_episodes auto-batches by cohort size even
     data.frame(person_id = "P9", concept_id = "C2", date = "2024-01-15", value = "Z")
   )
   persons <- paste0("P", 1:10)
-  sql_dir <- system.file(package = "episodeR", "sql/")
 
   run_it <- function(batch_size) {
     sv_meta <- rbind(
@@ -232,7 +228,6 @@ testthat::test_that("create_univariate_episodes auto-batches by cohort size even
       study_variables = sv_meta,
       con = con,
       person_ids = persons,
-      sql_dir = sql_dir,
       start_study_date = "2024-01-01",
       end_date_missing_inclusion = "2024-01-31",
       output_hive_path = hive_dir,
@@ -287,7 +282,7 @@ testthat::test_that("create_univariate_episodes agrees with univariate_episodes_
     unlink(hive_dir, recursive = TRUE, force = TRUE)
     on.exit(unlink(hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
     create_univariate_episodes(
-      study_variables = sv_meta, con = con, person_ids = persons, sql_dir = sql_dir,
+      study_variables = sv_meta, con = con, person_ids = persons,
       start_study_date = "2024-01-01", end_date_missing_inclusion = "2024-01-31",
       output_hive_path = hive_dir, batch_column = "batch", missing_col = "missing_set_to"
     )

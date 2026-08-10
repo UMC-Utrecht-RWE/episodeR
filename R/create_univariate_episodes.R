@@ -22,15 +22,18 @@
 ##' If provided, must be a character or numeric vector of person_ids.
 ##' @param concepts_table Character scalar naming the concepts source
 ##' table/view. If different from D3_CONCEPTS, it is aliased as D3_CONCEPTS.
-##' @param sql_dir Directory containing create_univariate_episodes_*.sql
-##' pipeline scripts.
 ##' @param start_study_date Study period start date.
 ##' @param end_date_missing_inclusion Study period end date.
 ##' @param output_hive_path Directory path where parquet hive output
 ##' partitions will be written after each full 5-step pipeline execution.
 ##' @param batch_size Maximum number of persons per batch. Cohorts larger than
 ##' this are split into batches, even for variables not flagged via
-##' batch_column; smaller cohorts run as a single pass. Defaults to 5000.
+##' batch_column; smaller cohorts run as a single pass. Defaults to 50000 --
+##' this function's single-pass path is cheap per person (unlike
+##' [create_multivariate_episodes()]'s wide combination table), so
+##' benchmarking on a 100K-person/10-variable cohort showed unbatched runs
+##' consistently fastest with no memory pressure; 50000 keeps batching as a
+##' real safety net for larger cohorts while capturing most of that gain.
 ##' @param batch_column Name of Boolean column in study_variables
 ##' indicating whether a variable should always be processed in batches.
 ##' batch_size is otherwise the driver: a cohort larger than batch_size is
@@ -53,17 +56,18 @@ create_univariate_episodes <- function(
     con,
     person_ids = NULL,
     concepts_table = "D3_CONCEPTS",
-    sql_dir,
     start_study_date,
     end_date_missing_inclusion,
     output_hive_path,
-    batch_size = 5000L,
+    batch_size = 50000L,
     batch_column = "batch",
     missing_col = NULL) {
   if (missing(output_hive_path) || !nzchar(output_hive_path)) {
     stop("output_hive_path must be provided and non-empty.")
   }
   dir.create(output_hive_path, recursive = TRUE, showWarnings = FALSE)
+
+  sql_dir <- system.file("sql", package = "episodeR")
 
   if (!(batch_column %in% names(study_variables))) {
     stop(sprintf(

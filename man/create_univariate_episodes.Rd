@@ -9,11 +9,10 @@ create_univariate_episodes(
   con,
   person_ids = NULL,
   concepts_table = "D3_CONCEPTS",
-  sql_dir,
   start_study_date,
   end_date_missing_inclusion,
   output_hive_path,
-  batch_size = 5000L,
+  batch_size = 50000L,
   batch_column = "batch",
   missing_col = NULL
 )
@@ -31,9 +30,6 @@ If provided, must be a character or numeric vector of person_ids.}
 \item{concepts_table}{Character scalar naming the concepts source
 table/view. If different from D3_CONCEPTS, it is aliased as D3_CONCEPTS.}
 
-\item{sql_dir}{Directory containing create_univariate_episodes_*.sql
-pipeline scripts.}
-
 \item{start_study_date}{Study period start date.}
 
 \item{end_date_missing_inclusion}{Study period end date.}
@@ -43,7 +39,12 @@ partitions will be written after each full 5-step pipeline execution.}
 
 \item{batch_size}{Maximum number of persons per batch. Cohorts larger than
 this are split into batches, even for variables not flagged via
-batch_column; smaller cohorts run as a single pass. Defaults to 5000.}
+batch_column; smaller cohorts run as a single pass. Defaults to 50000 --
+this function's single-pass path is cheap per person (unlike
+\code{\link[=create_multivariate_episodes]{create_multivariate_episodes()}}'s wide combination table), so
+benchmarking on a 100K-person/10-variable cohort showed unbatched runs
+consistently fastest with no memory pressure; 50000 keeps batching as a
+real safety net for larger cohorts while capturing most of that gain.}
 
 \item{batch_column}{Name of Boolean column in study_variables
 indicating whether a variable should always be processed in batches.

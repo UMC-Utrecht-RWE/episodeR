@@ -156,7 +156,6 @@ testthat::test_that("create_univariate_episodes + create_multivariate_episodes p
     study_variables = sv_meta,
     con = con_new,
     person_ids = persons,
-    sql_dir = sql_dir,
     start_study_date = as.character(start_study_date),
     end_date_missing_inclusion = as.character(end_study_date),
     output_hive_path = uni_new_dir,
