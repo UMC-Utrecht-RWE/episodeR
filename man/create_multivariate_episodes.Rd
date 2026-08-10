@@ -10,7 +10,7 @@ create_multivariate_episodes(
   d3_univariate_episodes_path,
   output_path,
   person_ids = NULL,
-  batch_size = 7000L,
+  batch_size = 5000L,
   batch_column = "batch",
   data_type_col = "data_type"
 )
@@ -33,7 +33,11 @@ didn't trigger, several when it did.}
 distinct person_ids in the univariate episodes input.}
 
 \item{batch_size}{Maximum number of persons per batch before the
-batching safety net kicks in. Defaults to 7000.}
+batching safety net kicks in. Defaults to 5000 -- benchmarking on a
+100K-person/10-variable cohort found this the fastest value tested:
+smaller batch sizes pay a large per-batch input re-scan cost, while
+larger ones (50000+) push the wide combination table into memory
+pressure and can fail outright on large cohorts.}
 
 \item{batch_column}{Name of a Boolean column in study_variables. Required
 (its presence is validated); when any value is TRUE batching is forced even
