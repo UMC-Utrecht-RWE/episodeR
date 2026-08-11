@@ -2,8 +2,8 @@
 ##'
 ##' Processes D3_UNIVARIATE_EPISODES hive-partitioned parquet into a wide
 ##' multivariate combination table (D3_MULTIVARIATE_EPISODES), processing
-##' persons in batches of batch_size and appending each batch into a single
-##' accumulator table before writing the final table to parquet once.
+##' persons in batches of batch_size and writing each batch to parquet before
+##' combining them into the final table.
 ##'
 ##' @param study_variables Data frame with variable metadata including
 ##' variable_id and a Boolean batching column.
@@ -29,7 +29,7 @@
 #'
 #' @import data.table
 #' @export
-multivariate_episodes_pipeline <- function(
+multivariate_episodes_pipeline_3 <- function(
   study_variables,
   con,
   d3_univariate_episodes_path,
@@ -43,11 +43,6 @@ multivariate_episodes_pipeline <- function(
   if (missing(output_path) || !nzchar(output_path)) {
     stop("output_path must be provided and non-empty.")
   }
-
-  if (dir.exists(output_path)) {
-    unlink(output_path, recursive = TRUE, force = TRUE)
-  }
-
   dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
 
   if (!(batch_column %in% names(study_variables))) {
@@ -56,25 +51,6 @@ multivariate_episodes_pipeline <- function(
       batch_column
     ))
   }
-
-  if (!("variable_id" %in% names(study_variables))) {
-    stop("study_variables must include a 'variable_id' column.")
-  }
-
-  target_variable_ids <- unique(study_variables$variable_id)
-  target_variable_ids <- target_variable_ids[!is.na(target_variable_ids)]
-  if (length(target_variable_ids) == 0) {
-    stop("study_variables has no non-missing variable_id values to process.")
-  }
-  logger::log_info(
-    "Processing only variable_id(s) present in study_variables: {paste(sort(target_variable_ids), collapse = ', ')}"
-  )
-  DBI::dbWriteTable(
-    con,
-    "list_sv",
-    data.frame(variable_id = target_variable_ids),
-    overwrite = TRUE
-  )
 
   batch_values <- study_variables[[batch_column]]
   if (is.logical(batch_values)) {
@@ -95,19 +71,19 @@ multivariate_episodes_pipeline <- function(
   do_batch <- any(use_batch)
 
   # Build date dimension from full univariate episodes range
-  DBI::dbExecute(
-    con,
-    sprintf(
-      "CREATE OR REPLACE TABLE dim_date AS
-     SELECT unnest(generate_series(
-       MIN(start_episode)::DATE,
-       MAX(end_episode)::DATE,
-       INTERVAL '1 day'
-     )) AS dates
-     FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)",
-      d3_univariate_episodes_path
-    )
-  )
+  # DBI::dbExecute(
+  #   con,
+  #   sprintf(
+  #     "CREATE OR REPLACE TABLE dim_date AS
+  #    SELECT unnest(generate_series(
+  #      MIN(start_episode)::DATE,
+  #      MAX(end_episode)::DATE,
+  #      INTERVAL '1 day'
+  #    )) AS dates
+  #    FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)",
+  #     d3_univariate_episodes_path
+  #   )
+  # )
 
   # Load SQL scripts once before batching
   uni_epi_param <- sprintf(
@@ -115,7 +91,7 @@ multivariate_episodes_pipeline <- function(
     d3_univariate_episodes_path
   )
   sql_explosion <- picard::load_sql_query(
-    file.path(sql_dir, "multi_epi_1_explosion.sql"),
+    file.path(sql_dir, "multi_epi_1_explosion_2.sql"),
     params = list(d3_univariate_episodes_path = uni_epi_param)
   )
   sql_combine <- picard::load_sql_query(file.path(
@@ -124,7 +100,7 @@ multivariate_episodes_pipeline <- function(
   ))
   sql_mergestatus <- picard::load_sql_query(file.path(
     sql_dir,
-    "multi_epi_3_mergestatus.sql"
+    "multi_epi_3_mergestatus_2.sql"
   ))
 
   # Resolve person_ids
@@ -222,25 +198,20 @@ multivariate_episodes_pipeline <- function(
     merged_episodes
   }
 
+  # Write each batch to its own parquet part, then combine the parts at the end
+  batch_dir <- file.path(
+    dirname(output_path),
+    sprintf("mv_episodes_batches_%s", basename(tempfile("")))
+  )
+  dir.create(batch_dir, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(batch_dir, recursive = TRUE), add = TRUE)
+
   # Process batch_size persons at a time
   n_persons <- length(person_ids)
-  is_batched_run <- do_batch || n_persons > batch_size
-  step <- if (is_batched_run) batch_size else n_persons
+  step <- if (do_batch || n_persons > batch_size) batch_size else n_persons
   batch_starts <- seq.int(1L, n_persons, by = step)
   logger::log_info(paste("Number of batches:", length(batch_starts)))
 
-  if (is_batched_run) {
-    batch_output_dir <- file.path(
-      dirname(output_path),
-      "D3_MULTIVARIATE_EPISODES"
-    )
-    if (dir.exists(batch_output_dir)) {
-      unlink(batch_output_dir, recursive = TRUE, force = TRUE)
-    }
-    dir.create(batch_output_dir, recursive = TRUE, showWarnings = FALSE)
-  }
-
-  # Attach each batch into a single table, then write it once
   for (i_batch in seq_along(batch_starts)) {
     logger::log_info(sprintf(
       "Processing batch %d of %d",
@@ -251,65 +222,43 @@ multivariate_episodes_pipeline <- function(
     to <- min(from + step - 1L, n_persons)
     batch_episodes <- run_batch(person_ids[from:to])
 
-    if (is_batched_run) {
-      DBI::dbWriteTable(
-        con,
-        "i_batch_multivariate_episodes",
-        batch_episodes,
-        overwrite = TRUE
-      )
-
-      batch_file <- file.path(
-        batch_output_dir,
-        sprintf("batch_%05d.parquet", i_batch)
-      )
-      batch_file_sql <- gsub("'", "''", batch_file, fixed = TRUE)
-
-      DBI::dbExecute(
-        con,
-        sprintf(
-          "COPY (
-              SELECT
-                person_id,
-                CAST(start_episode AS DATE) AS start_episode,
-                CAST(end_episode AS DATE) AS end_episode,
-                * EXCLUDE (person_id, start_episode, end_episode)
-             FROM i_batch_multivariate_episodes
-             )
-           TO '%s' (FORMAT 'parquet',
-            ROW_GROUP_SIZE 122880)",
-          batch_file_sql
-        )
-      )
-      DBI::dbExecute(con, "DROP TABLE IF EXISTS i_batch_multivariate_episodes")
-    } else {
-      DBI::dbWriteTable(
-        con,
-        "D3_MULTIVARIATE_EPISODES",
-        batch_episodes,
-        append = TRUE
-      )
-    }
+    DBI::dbWriteTable(
+      con,
+      "D3_MULTIVARIATE_EPISODES",
+      batch_episodes,
+      append = TRUE
+    )
+    # DBI::dbExecute(
+    #   con,
+    #   sprintf(
+    #     "COPY i_batch_output TO '%s' (FORMAT 'parquet')",
+    #     file.path(batch_dir, sprintf("batch_%05d.parquet", i_batch))
+    #   )
+    # )
     rm(batch_episodes)
   }
 
   logger::log_info("Batch processing complete")
 
-  if (!is_batched_run) {
-    DBI::dbExecute(
-      con,
-      sprintf(
-        "COPY (
-            SELECT
-              person_id,
-              CAST(start_episode AS DATE) AS start_episode,
-              CAST(end_episode AS DATE) AS end_episode,
-              * EXCLUDE (person_id, start_episode, end_episode)
-           FROM D3_MULTIVARIATE_EPISODES
-           )
-         TO '%s' (FORMAT 'parquet')",
-        output_path
-      )
+  # union_by_name fills variables a batch never produced (old rbindlist fill = TRUE).
+  # DBI::dbExecute(
+  #   con,
+  #   sprintf(
+  #     "CREATE OR REPLACE TABLE D3_MULTIVARIATE_EPISODES AS
+  #       SELECT
+  #         person_id,
+  #         CAST(start_episode AS DATE) AS start_episode,
+  #         CAST(end_episode AS DATE) AS end_episode,
+  #         * EXCLUDE (person_id, start_episode, end_episode)
+  #       FROM read_parquet('%s/*.parquet', union_by_name = TRUE)",
+  #     batch_dir
+  #   )
+  # )
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "COPY D3_MULTIVARIATE_EPISODES TO '%s' (FORMAT 'parquet')",
+      output_path
     )
-  }
+  )
 }
