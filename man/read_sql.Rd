@@ -11,7 +11,7 @@ read_sql(filename)
 "multi_initial.sql".}
 }
 \value{
-A single string with the file's contents, lines joined by "\n".
+A single string with the file's contents.
 }
 \description{
 Reads a SQL script from the package's installed \code{inst/sql} directory as a
