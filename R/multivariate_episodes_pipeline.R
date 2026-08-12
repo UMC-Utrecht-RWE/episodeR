@@ -11,7 +11,10 @@
 ##' @param d3_univariate_episodes_path Directory path to the
 ##' D3_UNIVARIATE_EPISODES hive-partitioned parquet folder.
 ##' @param sql_dir Directory containing multi_epi_*.sql pipeline scripts.
-##' @param output_path Full file path for the output parquet file.
+##' @param output_path For an unbatched run, the full file path for the
+##' output parquet file. For a batched run, a directory path instead: it is
+##' created (any existing contents are cleared first) and populated with
+##' one hive-style parquet file per batch (batch_00001.parquet, ...).
 ##' @param person_ids Optional vector of person_ids. If NULL, derived from
 ##' distinct person_ids in the univariate episodes input.
 ##' @param batch_size Maximum number of persons per batch. Cohorts larger than
@@ -24,8 +27,9 @@
 ##' the target data type for each variable (e.g. BOOL, NUM, INT, CHAR, DATE).
 ##' Defaults to "data_type". Set to NULL to skip type conversion.
 ##'
-##' @return Invisibly returns NULL; writes D3_MULTIVARIATE_EPISODES parquet
-##' to output_path.
+##' @return Invisibly returns NULL. For an unbatched run, writes a single
+##' D3_MULTIVARIATE_EPISODES parquet file to output_path. For a batched
+##' run, writes one parquet file per batch into the output_path directory.
 #'
 #' @import data.table
 #' @export

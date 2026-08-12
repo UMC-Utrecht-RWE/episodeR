@@ -111,16 +111,14 @@ testthat::test_that("batched run matches the single-batch expected output", {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   uni_hive_dir <- file.path(tempdir(), "multi_test_uni_hive_batched")
-  output_parquet <- file.path(tempdir(), "multi_test_batched.parquet")
-  # When batching, the pipeline writes one parquet file per batch into this
-  # directory instead of writing a single file at output_path.
-  batch_output_dir <- file.path(dirname(output_parquet), "D3_MULTIVARIATE_EPISODES")
+  # When batching, output_path is used as a directory: the pipeline
+  # populates it with one parquet file per batch instead of writing a
+  # single file.
+  output_dir <- file.path(tempdir(), "multi_test_batched")
   unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
-  unlink(output_parquet, force = TRUE)
-  unlink(batch_output_dir, recursive = TRUE, force = TRUE)
+  unlink(output_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
-  on.exit(unlink(output_parquet, force = TRUE), add = TRUE)
-  on.exit(unlink(batch_output_dir, recursive = TRUE, force = TRUE), add = TRUE)
+  on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
   uni_epi <- data.table::fread(file.path(
     data_dir,
@@ -148,17 +146,24 @@ testthat::test_that("batched run matches the single-batch expected output", {
     con = con,
     d3_univariate_episodes_path = uni_hive_dir,
     sql_dir = sql_dir,
-    output_path = output_parquet,
+    output_path = output_dir,
     person_ids = person_ids,
     batch_size = 1,
     batch_column = "batch"
   )
 
+  batch_files <- list.files(
+    output_dir,
+    pattern = "\\.parquet$",
+    full.names = TRUE
+  )
+  expect_true(length(batch_files) > 1) # one file per person at batch_size = 1
+
   actual <- data.table::as.data.table(DBI::dbGetQuery(
     con,
     sprintf(
       "SELECT * FROM read_parquet('%s/*.parquet')",
-      batch_output_dir
+      output_dir
     )
   ))
   actual[, start_episode := as.Date(start_episode)]

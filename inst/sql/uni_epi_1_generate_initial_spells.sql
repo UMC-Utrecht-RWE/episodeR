@@ -3,13 +3,13 @@
 -- Output: episodes_raw (person_id, variable_id, value, start_episode, end_episode)
 --
 -- Pipeline inside this step (mirrors v2 firststep CTEs):
---   concept_dedup     → deduplicate per (person, concept, date)
---   MCE_SV            → initial episodes: date + end_look_back / date + start_look_back
---   ranked_dates      → sort by start_episode per (person, variable)
---   intervals         → LEFT JOIN next row to get new_end
---   adjusted          → most-recent-record resolution: crop end_episode to next_start - 1
---   trimmed           → clamp to [start_study_date, end_study_date] + filter degenerate
---   episodes_raw      → chain-merge same-value adjacent/overlapping trimmed intervals
+--   concept_dedup     -> deduplicate per (person, concept, date)
+--   MCE_SV            -> initial episodes: date + end_look_back / date + start_look_back
+--   ranked_dates      -> sort by start_episode per (person, variable)
+--   intervals         -> LEFT JOIN next row to get new_end
+--   adjusted          -> most-recent-record resolution: crop end_episode to next_start - 1
+--   trimmed           -> clamp to [start_study_date, end_study_date] + filter degenerate
+--   episodes_raw      -> chain-merge same-value adjacent/overlapping trimmed intervals
 
 CREATE OR REPLACE TABLE concept_dedup AS
 WITH concepts_dated AS (
