@@ -4,13 +4,13 @@
 -- Output: episodes_raw (person_id, variable_id, value, start_episode, end_episode)
 --
 -- Pipeline inside this step (mirrors v2 firststep CTEs):
---   concept_dedup      -> deduplicate per (person, concept, date)
---   initial_episodes   -> initial episodes: date + end_look_back / date + start_look_back
---   ranked_dates       -> sort by start_episode per (person, variable)
---   episode_boundaries -> LEFT JOIN next row to get new_end
---   adjusted           -> most-recent-record resolution: crop end_episode to next_start - 1
---   trimmed            -> clamp to [start_study_date, end_study_date] + filter degenerate
---   episodes_raw       -> chain-merge same-value adjacent/overlapping trimmed intervals
+--   concept_dedup       -> deduplicate per (person, concept, date)
+--   initial_episodes    -> initial episodes: date + end_look_back / date + start_look_back
+--   ranked_dates        -> sort by start_episode per (person, variable)
+--   episode_boundaries  -> LEFT JOIN next row to get new_end
+--   adjusted            -> most-recent-record resolution: crop end_episode to next_start - 1
+--   trimmed             -> clamp to [start_study_date, end_study_date] + filter degenerate
+--   univariate_episodes -> chain-merge same-value adjacent/overlapping trimmed intervals
 
 -- Filtering to concept_id_list here (rather than only later in initial_episodes)
 -- shrinks the dedup GROUP BY to just the concept_ids this call actually
@@ -116,7 +116,7 @@ SELECT person_id, variable_id, value, start_episode, end_episode FROM trimmed;
 -- row. A new island starts whenever the current start is more than 1 day
 -- past that running max; PARTITION BY value groups NULL values together
 -- natively, so no extra NULL-equality handling is needed.
-CREATE OR REPLACE TABLE episodes_raw AS
+CREATE OR REPLACE TABLE univariate_episodes AS
 WITH ordered AS (
   SELECT *,
     MAX(end_episode) OVER (

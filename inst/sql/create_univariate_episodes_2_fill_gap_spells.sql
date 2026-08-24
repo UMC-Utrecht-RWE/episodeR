@@ -4,7 +4,7 @@
 --   (b) before the first episode: [start_study_date, first_start-1]
 --   (c) after the last episode: [last_end+1, end_study_date]
 -- Gap fills use the variable-specific missing_set_to from study_variables.
--- Input: episodes_raw, study_variables
+-- Input: univariate_episodes, study_variables
 -- Output: episodes_with_gaps
 
 CREATE OR REPLACE TABLE episodes_with_gaps AS
@@ -13,7 +13,7 @@ WITH ranked AS (
     ROW_NUMBER() OVER (PARTITION BY person_id, variable_id ORDER BY start_episode, end_episode)      AS rank_asc,
     ROW_NUMBER() OVER (PARTITION BY person_id, variable_id ORDER BY start_episode DESC, end_episode DESC) AS rank_desc,
     LAG(end_episode) OVER (PARTITION BY person_id, variable_id ORDER BY start_episode, end_episode)    AS prev_end
-  FROM episodes_raw
+  FROM univariate_episodes
 ),
 -- (a) Gaps between consecutive non-overlapping non-adjacent episodes
 --     gap = [prev_episode_end + 1, current_episode_start - 1]
@@ -43,7 +43,7 @@ after_last AS (
   FROM ranked
   WHERE rank_desc = 1
 )
-SELECT person_id, variable_id, value, start_episode, end_episode FROM episodes_raw
+SELECT person_id, variable_id, value, start_episode, end_episode FROM univariate_episodes
 UNION ALL
 SELECT es.person_id, es.variable_id, sv.missing_set_to AS value, es.start_episode, es.end_episode
 FROM empty_spaces es JOIN study_variables sv ON sv.variable_id = es.variable_id

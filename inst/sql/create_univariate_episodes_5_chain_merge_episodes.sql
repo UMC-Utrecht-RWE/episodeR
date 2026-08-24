@@ -5,7 +5,7 @@
 -- Output: D3_UNIVARIATE_EPISODES
 
 -- Uses the same gaps-and-islands window-function merge as uni_epi_1's
--- episodes_raw step (see comment there) instead of a self-join + NOT
+-- episodes_raw/univariate_episodes step (see comment there) instead of a self-join + NOT
 -- EXISTS, which is O(n^2) per (person_id, variable_id, value) partition.
 CREATE OR REPLACE TABLE D3_UNIVARIATE_EPISODES AS
 WITH ordered AS (
