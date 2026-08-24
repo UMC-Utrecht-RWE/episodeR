@@ -1,17 +1,18 @@
--- Step 1: Generate most-recent-record-resolved, trimmed, chain-merged episodes (replicates v2 firststep_v2.sql)
+-- Step 1: Generate most-recent-record-resolved, trimmed, chain-merged episodes 
+--   (replicates v2 firststep_v2.sql)
 -- Input: D3_CONCEPTS (view on concepts_db), study_variables, all_persons
 -- Output: episodes_raw (person_id, variable_id, value, start_episode, end_episode)
 --
 -- Pipeline inside this step (mirrors v2 firststep CTEs):
---   concept_dedup     -> deduplicate per (person, concept, date)
---   MCE_SV            -> initial episodes: date + end_look_back / date + start_look_back
---   ranked_dates      -> sort by start_episode per (person, variable)
---   intervals         -> LEFT JOIN next row to get new_end
---   adjusted          -> most-recent-record resolution: crop end_episode to next_start - 1
---   trimmed           -> clamp to [start_study_date, end_study_date] + filter degenerate
---   episodes_raw      -> chain-merge same-value adjacent/overlapping trimmed intervals
+--   concept_dedup      -> deduplicate per (person, concept, date)
+--   initial_episodes   -> initial episodes: date + end_look_back / date + start_look_back
+--   ranked_dates       -> sort by start_episode per (person, variable)
+--   episode_boundaries -> LEFT JOIN next row to get new_end
+--   adjusted           -> most-recent-record resolution: crop end_episode to next_start - 1
+--   trimmed            -> clamp to [start_study_date, end_study_date] + filter degenerate
+--   episodes_raw       -> chain-merge same-value adjacent/overlapping trimmed intervals
 
--- Filtering to concept_id_list here (rather than only later in MCE_SV)
+-- Filtering to concept_id_list here (rather than only later in initial_episodes)
 -- shrinks the dedup GROUP BY to just the concept_ids this call actually
 -- needs. Safe because the GROUP BY is per concept_id already, so rows for
 -- other concept_ids can never affect a kept concept_id's dedup result.
@@ -43,7 +44,7 @@ GROUP BY c.person_id, c.concept_id, c.date;
 
 CREATE OR REPLACE TABLE trimmed_episodes AS
 WITH
-MCE_SV AS (
+initial_episodes AS (
   SELECT DISTINCT
     c.person_id,
     sv.variable_id,
@@ -56,9 +57,9 @@ MCE_SV AS (
 ranked_dates AS (
   SELECT *,
     ROW_NUMBER() OVER (PARTITION BY person_id, variable_id ORDER BY start_episode) AS rn
-  FROM MCE_SV
+  FROM initial_episodes
 ),
-intervals AS (
+episode_boundaries AS (
   SELECT
     rd1.person_id,
     rd1.variable_id,
@@ -86,7 +87,7 @@ adjusted AS (
       THEN new_end - 1
       ELSE end_episode
     END AS end_episode
-  FROM intervals
+  FROM episode_boundaries
 ),
 -- Clamp to [start_study_date, end_study_date]; filter out episodes that don't overlap study period
 trimmed AS (
