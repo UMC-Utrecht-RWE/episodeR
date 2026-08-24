@@ -1,14 +1,14 @@
-## Tests for uni_epi_1_generate_initial_spells.sql
-##
-## Produces: concept_dedup, trimmed_episodes, episodes_raw
-##
-## NOTE on look-back column naming (verified against the SQL, not assumed):
-##   start_episode = concept.date + end_look_back
-##   end_episode   = concept.date + start_look_back
-## i.e. `start_look_back` controls how far the EPISODE END reaches forward
-## from the record date, and `end_look_back` controls the EPISODE START.
-## This is counter-intuitive naming but is the current, verified behaviour;
-## all fixtures below are written to match it explicitly.
+# Tests for uni_epi_1_generate_initial_spells.sql
+#
+# Produces: concept_dedup, trimmed_episodes, episodes_raw
+#
+# NOTE on look-back column naming (verified against the SQL, not assumed):
+#   start_episode = concept.date + end_look_back
+#   end_episode   = concept.date + start_look_back
+# i.e. `start_look_back` controls how far the EPISODE END reaches forward
+# from the record date, and `end_look_back` controls the EPISODE START.
+# This is counter-intuitive naming but is the current, verified behaviour;
+# all fixtures below are written to match it explicitly.
 
 test_that("a single concept record becomes one episode spanning its look-back window", {
   con <- new_test_con()
@@ -236,7 +236,8 @@ test_that("10 persons exercise dedup, MRR cropping, drop/clamp, chain-merge, and
 
   # P5 is fully dropped; everyone else contributes at least one row.
   expect_setequal(unique(out$person_id), setdiff(persons, "P5"))
-  expect_equal(nrow(out), 12) # 1+1+1+2+0+1+1+2+2+1 across P1..P10
+  # 1+1+1+2+0+1+1+2+2+1 rows for P1..P10
+  expect_equal(nrow(out), 12)
 
   p1 <- out[person_id == "P1"]
   expect_equal(nrow(p1), 1)
