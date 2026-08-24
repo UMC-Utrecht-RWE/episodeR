@@ -35,7 +35,7 @@ SELECT
   c.concept_id,
   c.date,
   CASE
-    WHEN COUNT(DISTINCT c.value) > 1 THEN 'unknown'
+    WHEN COUNT(DISTINCT c.value) > 1 THEN 'episodeR_conflict_values_on_date'
     ELSE MAX(c.value)
   END AS value
 FROM concepts_dated c
