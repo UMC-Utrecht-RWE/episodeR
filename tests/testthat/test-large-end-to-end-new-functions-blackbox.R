@@ -1,18 +1,18 @@
-## Large-scale black-box parity test: create_univariate_episodes() +
-## create_multivariate_episodes() (new) vs univariate_episodes_pipeline() +
-## multivariate_episodes_pipeline() (old, deprecated) end-to-end, across a
-## cohort/variable count an order of magnitude past the existing
-## hand-verified fixtures (which top out around 10 persons / 10 variables).
-##
-## Same fixture-generation strategy as test-large-end-to-end-blackbox.R
-## (which validates the old functions alone against reference_combine()),
-## but here both old and new pipelines are run on the *same* synthetic
-## input in the *same* test, and their outputs are compared directly for
-## exact equality. That's a stronger check than either function's small
-## dedicated blackbox tests give: it confirms the new SQL rewrites (sweep-
-## line multivariate combine, window-function univariate chain-merge) agree
-## with the old self-join/explode implementations at width/scale, not just
-## on hand-picked small cases.
+# Large-scale black-box parity test: create_univariate_episodes() +
+# create_multivariate_episodes() (new) vs univariate_episodes_pipeline() +
+# multivariate_episodes_pipeline() (old, deprecated) end-to-end, across a
+# cohort/variable count an order of magnitude past the existing
+# hand-verified fixtures (which top out around 10 persons / 10 variables).
+#
+# Same fixture-generation strategy as test-large-end-to-end-blackbox.R
+# (which validates the old functions alone against reference_combine()),
+# but here both old and new pipelines are run on the *same* synthetic
+# input in the *same* test, and their outputs are compared directly for
+# exact equality. That's a stronger check than either function's small
+# dedicated blackbox tests give: it confirms the new SQL rewrites (sweep-
+# line multivariate combine, window-function univariate chain-merge) agree
+# with the old self-join/explode implementations at width/scale, not just
+# on hand-picked small cases.
 
 testthat::test_that("create_univariate_episodes + create_multivariate_episodes produce identical output to the old functions across 20 persons / 30 variables", {
   set.seed(20240101)
@@ -156,7 +156,6 @@ testthat::test_that("create_univariate_episodes + create_multivariate_episodes p
     study_variables = sv_meta,
     con = con_new,
     person_ids = persons,
-    sql_dir = sql_dir,
     start_study_date = as.character(start_study_date),
     end_date_missing_inclusion = as.character(end_study_date),
     output_hive_path = uni_new_dir,

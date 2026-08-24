@@ -1,14 +1,21 @@
-## Black-box test for create_multivariate_episodes().
-##
-## Duplicate of test-multivariate-pipeline-blackbox.R (which tests
-## multivariate_episodes_pipeline()), retargeted at create_multivariate_episodes()
-## to confirm the refactor produces identical output. create_multivariate_episodes()
-## doesn't take a sql_dir argument (it resolves its SQL files internally);
-## everything else, including output_path always being a directory of
-## batch_NNNNN.parquet files read via a "*.parquet" glob, matches the
-## original file's fixtures, expected values, and assertions.
+# Black-box test for create_multivariate_episodes().
+#
+# Duplicate of test-multivariate-pipeline-blackbox.R (which tests
+# multivariate_episodes_pipeline()), retargeted at create_multivariate_episodes()
+# to confirm the refactor produces identical output. create_multivariate_episodes()
+# doesn't take a sql_dir argument (it resolves its SQL files internally);
+# everything else, including output_path always being a directory of
+# batch_NNNNN.parquet files read via a "*.parquet" glob, matches the
+# original file's fixtures, expected values, and assertions.
 
 testthat::test_that("create_multivariate_episodes produces correct output across 10 persons/2 variables", {
+  # The univariate input is constructed directly (not produced by running
+  # univariate_episodes_pipeline()) so the expected combined intervals can
+  # be computed by hand via simple interval intersection, covering:
+  # constant/constant, one variable changing, both changing together,
+  # staggered changes, a value recurring after an interruption (must NOT
+  # false-merge across the interruption), NULL values, a change at the
+  # very last day, and a 4-segment staggered case.
   ep <- function(person, variable_id, value, start, end) {
     data.frame(
       person_id = person, variable_id = variable_id, value = value,
@@ -175,16 +182,19 @@ testthat::test_that("create_multivariate_episodes round-trips correctly on real 
   unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
-  univariate_episodes_pipeline(
-    study_variables = sv_meta,
-    con = con,
-    person_ids = persons,
-    sql_dir = sql_dir,
-    start_study_date = "2024-01-01",
-    end_date_missing_inclusion = "2024-01-31",
-    output_hive_path = uni_hive_dir,
-    batch_column = "batch",
-    missing_col = "missing_set_to"
+  testthat::expect_warning(
+    univariate_episodes_pipeline(
+      study_variables = sv_meta,
+      con = con,
+      person_ids = persons,
+      sql_dir = sql_dir,
+      start_study_date = "2024-01-01",
+      end_date_missing_inclusion = "2024-01-31",
+      output_hive_path = uni_hive_dir,
+      batch_column = "batch",
+      missing_col = "missing_set_to"
+    ),
+    "will be deprecated"
   )
 
   actual_uni <- data.table::as.data.table(DBI::dbGetQuery(
@@ -422,7 +432,8 @@ testthat::test_that("create_multivariate_episodes combines 10 simultaneous varia
   data.table::setcolorder(actual, names(expected))
 
   testthat::expect_equal(nrow(actual), 18)
-  testthat::expect_equal(nrow(actual[actual$person_id == "P3", ]), 11) # the fragmentation case
+  # P3 is the maximally-staggered fragmentation case.
+  testthat::expect_equal(nrow(actual[actual$person_id == "P3", ]), 11)
   testthat::expect_equal(actual, expected)
 })
 
@@ -509,8 +520,9 @@ testthat::test_that("create_multivariate_episodes produces identical output whet
   unbatched <- run_it(FALSE)
   batched <- run_it(TRUE, batch_size = 2L)
 
-  testthat::expect_equal(unbatched$n_batch_files, 1) # single-pass path -> one file
-  testthat::expect_equal(batched$n_batch_files, 5) # 10 persons / batch_size 2 -> 5 batch files
+  # single-pass path -> one file; 10 persons / batch_size 2 -> 5 batch files
+  testthat::expect_equal(unbatched$n_batch_files, 1)
+  testthat::expect_equal(batched$n_batch_files, 5)
 
   testthat::expect_equal(unbatched$data, batched$data)
 })
@@ -559,25 +571,29 @@ testthat::test_that("create_multivariate_episodes: batch_size threshold alone tr
   # matching how progress is logged elsewhere in this function, so it isn't
   # observable via expect_warning(). Assert on the resulting behavior
   # instead: batching actually split the cohort into multiple batch files.
+  # 6 persons > batch_size 2, with batch = FALSE - the size threshold alone
+  # must trigger batching.
   create_multivariate_episodes(
     study_variables = sv_meta,
     con = con,
     d3_univariate_episodes_path = uni_hive_dir,
     output_path = output_dir,
     person_ids = paste0("P", 1:6),
-    batch_size = 2L, # 6 persons > batch_size 2, with batch = FALSE
+    batch_size = 2L,
     batch_column = "batch",
     data_type_col = "data_type"
   )
 
+  # 6 persons / batch_size 2 -> 3 batches
   batch_files <- list.files(output_dir, pattern = "\\.parquet$")
-  testthat::expect_equal(length(batch_files), 3) # 6 persons / batch_size 2 -> 3 batches
+  testthat::expect_equal(length(batch_files), 3)
 
   actual <- data.table::as.data.table(DBI::dbGetQuery(
     con,
     sprintf("SELECT * FROM read_parquet('%s')", file.path(output_dir, "*.parquet"))
   ))
-  testthat::expect_equal(nrow(actual), 6) # one constant-combination episode per person
+  # one constant-combination episode per person
+  testthat::expect_equal(nrow(actual), 6)
 })
 
 testthat::test_that("create_multivariate_episodes only processes variable_id(s) declared in study_variables", {
