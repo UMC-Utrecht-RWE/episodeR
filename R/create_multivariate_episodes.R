@@ -97,25 +97,6 @@ create_multivariate_episodes <- function(
 
   sql_build_episodes <- read_sql("create_multivariate_episodes.sql")
 
-  write_batch_output <- function(i_batch) {
-    batch_file <- file.path(output_path, sprintf("batch_%05d.parquet", i_batch))
-    DBI::dbExecute(
-      con,
-      sprintf(
-        "COPY (
-            SELECT
-              person_id,
-              TRY_CAST(start_episode AS DATE) AS start_episode,
-              TRY_CAST(end_episode AS DATE) AS end_episode,
-              * EXCLUDE (person_id, start_episode, end_episode)
-           FROM multivariate_episode_wide
-           )
-         TO '%s' (FORMAT 'parquet')",
-        batch_file
-      )
-    )
-  }
-
   # Batching is a safety net for cohorts too large to fit in memory in one
   # pass -- not the default path. It only activates when a
   # study_variables[[batch_column]] flag is TRUE or the cohort exceeds
@@ -158,7 +139,7 @@ create_multivariate_episodes <- function(
     )
     DBI::dbExecute(con, sql_initial)
     DBI::dbExecute(con, sql_build_episodes)
-    write_batch_output(1L)
+    write_batch_output(con, output_path, 1L)
   } else {
     logger::log_warn(sprintf(
       paste(
@@ -193,7 +174,7 @@ create_multivariate_episodes <- function(
 
       DBI::dbExecute(con, sql_initial_batched)
       DBI::dbExecute(con, sql_build_episodes)
-      write_batch_output(i_batch)
+      write_batch_output(con, output_path, i_batch)
     }
   }
 

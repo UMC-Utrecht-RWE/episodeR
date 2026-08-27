@@ -1,13 +1,13 @@
-## Black-box test for univariate_episodes_pipeline().
-##
-## Unlike test_univariate_episodes_pipeline.R and the test-univariate-step*.R
-## files, this test never touches uni_epi_*.sql or any intermediate SQL
-## table (concept_dedup, trimmed_episodes, episodes_raw, ...) - it only
-## calls the public univariate_episodes_pipeline() function and asserts on
-## its final parquet output. It's meant to survive a rewrite of the SQL
-## implementation, as long as the function's documented input/output
-## contract holds; the SQL-specific test files are expected to be deleted
-## once that rewrite lands.
+# Black-box test for univariate_episodes_pipeline().
+#
+# Unlike test_univariate_episodes_pipeline.R and the test-univariate-step*.R
+# files, this test never touches uni_epi_*.sql or any intermediate SQL
+# table (concept_dedup, trimmed_episodes, episodes_raw, ...) - it only
+# calls the public univariate_episodes_pipeline() function and asserts on
+# its final parquet output. It's meant to survive a rewrite of the SQL
+# implementation, as long as the function's documented input/output
+# contract holds; the SQL-specific test files are expected to be deleted
+# once that rewrite lands.
 
 testthat::test_that("univariate_episodes_pipeline produces correct output across 10 persons/2 variables", {
   # Covers, across one combined run: same-day dedup collapse, MRR cropping,
