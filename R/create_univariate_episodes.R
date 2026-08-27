@@ -68,8 +68,6 @@ create_univariate_episodes <- function(
   }
   dir.create(output_hive_path, recursive = TRUE, showWarnings = FALSE)
 
-  sql_dir <- system.file("sql", package = "episodeR")
-
   if (!(batch_column %in% names(study_variables))) {
     stop(sprintf(
       "study_variables must include a Boolean '%s' column to control batching per variable.",
@@ -175,13 +173,10 @@ create_univariate_episodes <- function(
       sprintf("CREATE OR REPLACE VIEW all_persons AS %s", person_filter_query)
     )
 
-    picard::execute_sql_file(
-      sql = picard::load_sql_query(
-        file.path(
-          sql_dir,
-          "create_univariate_episodes_1_generate_initial_spells.sql"
-        ),
-        params = c(
+    DBI::dbExecute(
+      con,
+      glue::glue_data(
+        c(
           list(
             concept_id_list = paste(
               sprintf("'%s'", concept_ids),
@@ -189,38 +184,30 @@ create_univariate_episodes <- function(
             )
           ),
           params_common
-        )
-      ),
-      conn = con
-    )
-
-    picard::execute_sql_file(
-      sql = picard::load_sql_query(
-        file.path(sql_dir, "create_univariate_episodes_2_fill_gap_spells.sql"),
-        params = params_common
-      ),
-      conn = con
-    )
-
-    picard::execute_sql_file(
-      sql = picard::load_sql_query(
-        file.path(
-          sql_dir,
-          "create_univariate_episodes_3_add_missing_persons.sql"
         ),
-        params = params_common
-      ),
-      conn = con
+        read_sql("create_univariate_episodes_1_generate_initial_spells.sql")
+      )
     )
 
-    picard::execute_sql_file(
-      sql = picard::load_sql_query(
-        file.path(
-          sql_dir,
-          "create_univariate_episodes_4_chain_merge_episodes.sql"
-        )
-      ),
-      conn = con
+    DBI::dbExecute(
+      con,
+      glue::glue_data(
+        params_common,
+        read_sql("create_univariate_episodes_2_fill_gap_spells.sql")
+      )
+    )
+
+    DBI::dbExecute(
+      con,
+      glue::glue_data(
+        params_common,
+        read_sql("create_univariate_episodes_3_add_missing_persons.sql")
+      )
+    )
+
+    DBI::dbExecute(
+      con,
+      read_sql("create_univariate_episodes_4_chain_merge_episodes.sql")
     )
 
     DBI::dbExecute(
