@@ -1,15 +1,14 @@
-# Black-box test for multivariate_episodes_pipeline().
+# Black-box test for create_multivariate_episodes().
 #
-# Unlike test_multivariate_episodes_pipeline.R and the
-# test-multivariate-step*.R files, this test never touches multi_epi_*.sql
-# or any intermediate SQL table (EXPLODED, dim_var, multivariate_episode,
-# ...) - it only calls the public multivariate_episodes_pipeline()
-# function and asserts on its final parquet output. It's meant to survive
-# a rewrite of the SQL implementation, as long as the function's
-# documented input/output contract holds; the SQL-specific test files are
-# expected to be deleted once that rewrite lands.
+# Duplicate of test-multivariate-pipeline-blackbox.R (which tests
+# multivariate_episodes_pipeline()), retargeted at create_multivariate_episodes()
+# to confirm the refactor produces identical output. create_multivariate_episodes()
+# doesn't take a sql_dir argument (it resolves its SQL files internally);
+# everything else, including output_path always being a directory of
+# batch_NNNNN.parquet files read via a "*.parquet" glob, matches the
+# original file's fixtures, expected values, and assertions.
 
-testthat::test_that("multivariate_episodes_pipeline produces correct output across 10 persons/2 variables", {
+testthat::test_that("create_multivariate_episodes produces correct output across 10 persons/2 variables", {
   # The univariate input is constructed directly (not produced by running
   # univariate_episodes_pipeline()) so the expected combined intervals can
   # be computed by hand via simple interval intersection, covering:
@@ -47,7 +46,7 @@ testthat::test_that("multivariate_episodes_pipeline produces correct output acro
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  uni_hive_dir <- file.path(tempdir(), "multi_blackbox_uni_hive")
+  uni_hive_dir <- file.path(tempdir(), "create_multi_blackbox_uni_hive")
   unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
   dir.create(uni_hive_dir, recursive = TRUE, showWarnings = FALSE)
@@ -66,31 +65,23 @@ testthat::test_that("multivariate_episodes_pipeline produces correct output acro
     data_type = "CHAR"
   )
 
-  output_dir <- file.path(tempdir(), "multi_blackbox_output")
+  output_dir <- file.path(tempdir(), "create_multi_blackbox_output")
   unlink(output_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
-  sql_dir <- system.file(package = "episodeR", "sql/")
-  testthat::expect_warning(
-    multivariate_episodes_pipeline(
-      study_variables = sv_meta,
-      con = con,
-      d3_univariate_episodes_path = uni_hive_dir,
-      sql_dir = sql_dir,
-      output_path = output_dir,
-      person_ids = paste0("P", 1:10),
-      batch_column = "batch",
-      data_type_col = "data_type"
-    ),
-    "will be deprecated"
+  create_multivariate_episodes(
+    study_variables = sv_meta,
+    con = con,
+    d3_univariate_episodes_path = uni_hive_dir,
+    output_path = output_dir,
+    person_ids = paste0("P", 1:10),
+    batch_column = "batch",
+    data_type_col = "data_type"
   )
 
   actual <- data.table::as.data.table(DBI::dbGetQuery(
     con,
-    sprintf(
-      "SELECT * FROM read_parquet('%s')",
-      file.path(output_dir, "*.parquet")
-    )
+    sprintf("SELECT * FROM read_parquet('%s')", file.path(output_dir, "*.parquet"))
   ))
   actual[, start_episode := as.Date(start_episode)]
   actual[, end_episode := as.Date(end_episode)]
@@ -165,15 +156,7 @@ testthat::test_that("multivariate_episodes_pipeline produces correct output acro
   testthat::expect_equal(actual, expected)
 })
 
-testthat::test_that("multivariate_episodes_pipeline round-trips correctly on real univariate_episodes_pipeline() output", {
-  # Unlike the test above (which hand-constructs univariate input so the
-  # expected combination can be worked out by hand), this test runs the
-  # REAL univariate_episodes_pipeline() first, then feeds its actual
-  # output into multivariate_episodes_pipeline(), and checks the result
-  # against reference_combine() (helper-blackbox.R) applied to that same
-  # real univariate output. This validates the real schema coupling
-  # between the two functions - neither of the two hand-constructed
-  # black-box tests exercises that boundary.
+testthat::test_that("create_multivariate_episodes round-trips correctly on real univariate_episodes_pipeline() output", {
   concepts <- rbind(
     data.frame(person_id = "P1", concept_id = "C1", date = "2024-01-10", value = "A"),
     data.frame(person_id = "P2", concept_id = "C1", date = c("2024-01-01", "2024-01-07"), value = c("A", "B")),
@@ -195,7 +178,7 @@ testthat::test_that("multivariate_episodes_pipeline round-trips correctly on rea
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
   DBI::dbWriteTable(con, "D3_CONCEPTS", concepts, overwrite = TRUE)
 
-  uni_hive_dir <- file.path(tempdir(), "roundtrip_uni_hive")
+  uni_hive_dir <- file.path(tempdir(), "create_multi_roundtrip_uni_hive")
   unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
@@ -225,24 +208,20 @@ testthat::test_that("multivariate_episodes_pipeline round-trips correctly on rea
   actual_uni[, start_episode := as.Date(start_episode)]
   actual_uni[, end_episode := as.Date(end_episode)]
 
-  output_dir <- file.path(tempdir(), "roundtrip_multi_output")
+  output_dir <- file.path(tempdir(), "create_multi_roundtrip_output")
   unlink(output_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
   sv_meta_batched <- sv_meta
   sv_meta_batched$batch <- TRUE
-  testthat::expect_warning(
-    multivariate_episodes_pipeline(
-      study_variables = sv_meta_batched,
-      con = con,
-      d3_univariate_episodes_path = uni_hive_dir,
-      sql_dir = sql_dir,
-      output_path = output_dir,
-      person_ids = persons,
-      batch_column = "batch",
-      data_type_col = "data_type"
-    ),
-    "will be deprecated"
+  create_multivariate_episodes(
+    study_variables = sv_meta_batched,
+    con = con,
+    d3_univariate_episodes_path = uni_hive_dir,
+    output_path = output_dir,
+    person_ids = persons,
+    batch_column = "batch",
+    data_type_col = "data_type"
   )
 
   actual_multi <- data.table::as.data.table(DBI::dbGetQuery(
@@ -259,93 +238,7 @@ testthat::test_that("multivariate_episodes_pipeline round-trips correctly on rea
   testthat::expect_equal(actual_multi, expected_multi)
 })
 
-testthat::test_that("multivariate_episodes_pipeline produces identical output whether or not it's batched", {
-  # Forces the batched code path (batch = TRUE, batch_size = 2 -> 5
-  # batches of 2 persons each for the same 10 persons, output_path used
-  # as a directory) and checks the result is identical to the unbatched
-  # single-file run. Reuses the same fixture as the "10 persons/2
-  # variables" test above.
-  ep <- function(person, variable_id, value, start, end) {
-    data.frame(
-      person_id = person, variable_id = variable_id, value = value,
-      start_episode = as.Date(start), end_episode = as.Date(end),
-      stringsAsFactors = FALSE
-    )
-  }
-  uni_epi <- rbind(
-    ep("P1", "VAR1", "A", "2024-01-01", "2024-01-10"), ep("P1", "VAR2", "X", "2024-01-01", "2024-01-10"),
-    ep("P2", "VAR1", "A", "2024-01-01", "2024-01-04"), ep("P2", "VAR1", "B", "2024-01-05", "2024-01-10"),
-    ep("P2", "VAR2", "X", "2024-01-01", "2024-01-10"),
-    ep("P3", "VAR1", "A", "2024-01-01", "2024-01-10"),
-    ep("P3", "VAR2", "X", "2024-01-01", "2024-01-05"), ep("P3", "VAR2", "Y", "2024-01-06", "2024-01-10"),
-    ep("P4", "VAR1", "A", "2024-01-01", "2024-01-04"), ep("P4", "VAR1", "B", "2024-01-05", "2024-01-10"),
-    ep("P4", "VAR2", "X", "2024-01-01", "2024-01-04"), ep("P4", "VAR2", "Y", "2024-01-05", "2024-01-10"),
-    ep("P5", "VAR1", "A", "2024-01-01", "2024-01-03"), ep("P5", "VAR1", "B", "2024-01-04", "2024-01-10"),
-    ep("P5", "VAR2", "X", "2024-01-01", "2024-01-06"), ep("P5", "VAR2", "Y", "2024-01-07", "2024-01-10"),
-    ep("P6", "VAR1", "A", "2024-01-01", "2024-01-03"), ep("P6", "VAR1", "B", "2024-01-04", "2024-01-06"), ep("P6", "VAR1", "A", "2024-01-07", "2024-01-10"),
-    ep("P6", "VAR2", "X", "2024-01-01", "2024-01-10"),
-    ep("P7", "VAR1", NA_character_, "2024-01-01", "2024-01-10"), ep("P7", "VAR2", "X", "2024-01-01", "2024-01-10"),
-    ep("P8", "VAR1", "Q", "2024-01-01", "2024-01-10"), ep("P8", "VAR2", "R", "2024-01-01", "2024-01-10"),
-    ep("P9", "VAR1", "A", "2024-01-01", "2024-01-09"), ep("P9", "VAR1", "B", "2024-01-10", "2024-01-10"),
-    ep("P9", "VAR2", "X", "2024-01-01", "2024-01-10"),
-    ep("P10", "VAR1", "A", "2024-01-01", "2024-01-03"), ep("P10", "VAR1", "B", "2024-01-04", "2024-01-07"), ep("P10", "VAR1", "A", "2024-01-08", "2024-01-10"),
-    ep("P10", "VAR2", "X", "2024-01-01", "2024-01-05"), ep("P10", "VAR2", "Y", "2024-01-06", "2024-01-10")
-  )
-  sql_dir <- system.file(package = "episodeR", "sql/")
-
-  run_it <- function(batch_flag, batch_size = NULL) {
-    con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
-    on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
-
-    uni_hive_dir <- file.path(tempdir(), paste0("multi_batching_equiv_uni_", batch_flag))
-    unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
-    on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
-    dir.create(uni_hive_dir, recursive = TRUE, showWarnings = FALSE)
-    DBI::dbWriteTable(con, "uni_epi_input", uni_epi, overwrite = TRUE)
-    DBI::dbExecute(
-      con,
-      sprintf(
-        "COPY uni_epi_input TO '%s' (FORMAT PARQUET, PARTITION_BY (variable_id))",
-        uni_hive_dir
-      )
-    )
-
-    sv_meta <- data.table::data.table(variable_id = c("VAR1", "VAR2"), batch = batch_flag, data_type = "CHAR")
-    output_path <- file.path(tempdir(), paste0("multi_batching_equiv_out_", batch_flag))
-    unlink(output_path, recursive = TRUE, force = TRUE)
-    on.exit(unlink(output_path, recursive = TRUE, force = TRUE), add = TRUE)
-
-    args <- list(
-      study_variables = sv_meta, con = con, d3_univariate_episodes_path = uni_hive_dir,
-      sql_dir = sql_dir, output_path = output_path, person_ids = paste0("P", 1:10),
-      batch_column = "batch", data_type_col = "data_type"
-    )
-    if (!is.null(batch_size)) args$batch_size <- batch_size
-    testthat::expect_warning(do.call(multivariate_episodes_pipeline, args), "will be deprecated")
-
-    read_glob <- if (dir.exists(output_path)) file.path(output_path, "*.parquet") else output_path
-    out <- data.table::as.data.table(DBI::dbGetQuery(con, sprintf("SELECT * FROM read_parquet('%s')", read_glob)))
-    out[, start_episode := as.Date(start_episode)]
-    out[, end_episode := as.Date(end_episode)]
-    data.table::setorder(out, person_id, start_episode)
-    out[]
-  }
-
-  unbatched <- run_it(FALSE)
-  batched <- run_it(TRUE, batch_size = 2L)
-
-  testthat::expect_equal(unbatched, batched)
-})
-
-testthat::test_that("multivariate_episodes_pipeline combines 3 simultaneous variables correctly", {
-  # The two tests above only ever combine 2 variables, which wouldn't
-  # catch a bug specific to combining 3+ (e.g. string_agg/dictionary
-  # ordering, or a self-join condition that only checks one other
-  # variable). Uses reference_combine() (helper-blackbox.R) as the
-  # expected-output oracle rather than a hand-computed table, since with
-  # 3 variables and 10 persons manual interval intersection would be
-  # error-prone - reference_combine() was already validated against a
-  # hand-verified 2-variable fixture elsewhere in this file.
+testthat::test_that("create_multivariate_episodes combines 3 simultaneous variables correctly", {
   ep <- function(person, variable_id, value, start, end) {
     data.frame(
       person_id = person, variable_id = variable_id, value = value,
@@ -390,7 +283,7 @@ testthat::test_that("multivariate_episodes_pipeline combines 3 simultaneous vari
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  uni_hive_dir <- file.path(tempdir(), "multi_3var_uni_hive")
+  uni_hive_dir <- file.path(tempdir(), "create_multi_3var_uni_hive")
   unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
   dir.create(uni_hive_dir, recursive = TRUE, showWarnings = FALSE)
@@ -408,23 +301,18 @@ testthat::test_that("multivariate_episodes_pipeline combines 3 simultaneous vari
     batch = TRUE,
     data_type = "CHAR"
   )
-  output_dir <- file.path(tempdir(), "multi_3var_output")
+  output_dir <- file.path(tempdir(), "create_multi_3var_output")
   unlink(output_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
-  sql_dir <- system.file(package = "episodeR", "sql/")
-  testthat::expect_warning(
-    multivariate_episodes_pipeline(
-      study_variables = sv_meta,
-      con = con,
-      d3_univariate_episodes_path = uni_hive_dir,
-      sql_dir = sql_dir,
-      output_path = output_dir,
-      person_ids = paste0("P", 1:10),
-      batch_column = "batch",
-      data_type_col = "data_type"
-    ),
-    "will be deprecated"
+  create_multivariate_episodes(
+    study_variables = sv_meta,
+    con = con,
+    d3_univariate_episodes_path = uni_hive_dir,
+    output_path = output_dir,
+    person_ids = paste0("P", 1:10),
+    batch_column = "batch",
+    data_type_col = "data_type"
   )
 
   actual <- data.table::as.data.table(DBI::dbGetQuery(
@@ -442,15 +330,7 @@ testthat::test_that("multivariate_episodes_pipeline combines 3 simultaneous vari
   testthat::expect_equal(actual, expected)
 })
 
-testthat::test_that("multivariate_episodes_pipeline combines 10 simultaneous variables correctly (extreme width)", {
-  # Deliberately extreme: 10 variables active at once, an order of
-  # magnitude past the 2- and 3-variable tests above, to catch bugs that
-  # only show up at width (e.g. string_agg/dictionary ordering with many
-  # ids, a self-join condition that only checks a fixed number of
-  # variables, or dcast/pivot issues with many columns). As with the
-  # 3-variable test, uses reference_combine() (helper-blackbox.R) as the
-  # oracle rather than a hand-computed table - manually intersecting 10
-  # variables' worth of intervals would be impractical to verify by eye.
+testthat::test_that("create_multivariate_episodes combines 10 simultaneous variables correctly (extreme width)", {
   ep <- function(person, variable_id, value, start, end) {
     data.frame(
       person_id = person, variable_id = variable_id, value = value,
@@ -508,7 +388,7 @@ testthat::test_that("multivariate_episodes_pipeline combines 10 simultaneous var
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  uni_hive_dir <- file.path(tempdir(), "multi_10var_uni_hive")
+  uni_hive_dir <- file.path(tempdir(), "create_multi_10var_uni_hive")
   unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
   dir.create(uni_hive_dir, recursive = TRUE, showWarnings = FALSE)
@@ -526,23 +406,18 @@ testthat::test_that("multivariate_episodes_pipeline combines 10 simultaneous var
     batch = TRUE,
     data_type = "CHAR"
   )
-  output_dir <- file.path(tempdir(), "multi_10var_output")
+  output_dir <- file.path(tempdir(), "create_multi_10var_output")
   unlink(output_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
-  sql_dir <- system.file(package = "episodeR", "sql/")
-  testthat::expect_warning(
-    multivariate_episodes_pipeline(
-      study_variables = sv_meta,
-      con = con,
-      d3_univariate_episodes_path = uni_hive_dir,
-      sql_dir = sql_dir,
-      output_path = output_dir,
-      person_ids = paste0("P", 1:5),
-      batch_column = "batch",
-      data_type_col = "data_type"
-    ),
-    "will be deprecated"
+  create_multivariate_episodes(
+    study_variables = sv_meta,
+    con = con,
+    d3_univariate_episodes_path = uni_hive_dir,
+    output_path = output_dir,
+    person_ids = paste0("P", 1:5),
+    batch_column = "batch",
+    data_type_col = "data_type"
   )
 
   actual <- data.table::as.data.table(DBI::dbGetQuery(
@@ -559,5 +434,249 @@ testthat::test_that("multivariate_episodes_pipeline combines 10 simultaneous var
   testthat::expect_equal(nrow(actual), 18)
   # P3 is the maximally-staggered fragmentation case.
   testthat::expect_equal(nrow(actual[actual$person_id == "P3", ]), 11)
+  testthat::expect_equal(actual, expected)
+})
+
+testthat::test_that("create_multivariate_episodes produces identical output whether or not the batching safety net triggers", {
+  # Batching is a safety net for cohorts too large to fit in memory in one
+  # pass, not the default path (see the "Batching is a safety net" section
+  # of ?create_multivariate_episodes) -- it must produce exactly the same
+  # episodes as the single-pass path. Forces the batched code path
+  # (batch = TRUE, batch_size = 2 -> 5 batches of 2 persons each for the
+  # same 10 persons) and checks the result is identical to the unbatched
+  # single-pass run. Reuses the same fixture as the "10 persons/2
+  # variables" test above.
+  ep <- function(person, variable_id, value, start, end) {
+    data.frame(
+      person_id = person, variable_id = variable_id, value = value,
+      start_episode = as.Date(start), end_episode = as.Date(end),
+      stringsAsFactors = FALSE
+    )
+  }
+  uni_epi <- rbind(
+    ep("P1", "VAR1", "A", "2024-01-01", "2024-01-10"), ep("P1", "VAR2", "X", "2024-01-01", "2024-01-10"),
+    ep("P2", "VAR1", "A", "2024-01-01", "2024-01-04"), ep("P2", "VAR1", "B", "2024-01-05", "2024-01-10"),
+    ep("P2", "VAR2", "X", "2024-01-01", "2024-01-10"),
+    ep("P3", "VAR1", "A", "2024-01-01", "2024-01-10"),
+    ep("P3", "VAR2", "X", "2024-01-01", "2024-01-05"), ep("P3", "VAR2", "Y", "2024-01-06", "2024-01-10"),
+    ep("P4", "VAR1", "A", "2024-01-01", "2024-01-04"), ep("P4", "VAR1", "B", "2024-01-05", "2024-01-10"),
+    ep("P4", "VAR2", "X", "2024-01-01", "2024-01-04"), ep("P4", "VAR2", "Y", "2024-01-05", "2024-01-10"),
+    ep("P5", "VAR1", "A", "2024-01-01", "2024-01-03"), ep("P5", "VAR1", "B", "2024-01-04", "2024-01-10"),
+    ep("P5", "VAR2", "X", "2024-01-01", "2024-01-06"), ep("P5", "VAR2", "Y", "2024-01-07", "2024-01-10"),
+    ep("P6", "VAR1", "A", "2024-01-01", "2024-01-03"), ep("P6", "VAR1", "B", "2024-01-04", "2024-01-06"), ep("P6", "VAR1", "A", "2024-01-07", "2024-01-10"),
+    ep("P6", "VAR2", "X", "2024-01-01", "2024-01-10"),
+    ep("P7", "VAR1", NA_character_, "2024-01-01", "2024-01-10"), ep("P7", "VAR2", "X", "2024-01-01", "2024-01-10"),
+    ep("P8", "VAR1", "Q", "2024-01-01", "2024-01-10"), ep("P8", "VAR2", "R", "2024-01-01", "2024-01-10"),
+    ep("P9", "VAR1", "A", "2024-01-01", "2024-01-09"), ep("P9", "VAR1", "B", "2024-01-10", "2024-01-10"),
+    ep("P9", "VAR2", "X", "2024-01-01", "2024-01-10"),
+    ep("P10", "VAR1", "A", "2024-01-01", "2024-01-03"), ep("P10", "VAR1", "B", "2024-01-04", "2024-01-07"), ep("P10", "VAR1", "A", "2024-01-08", "2024-01-10"),
+    ep("P10", "VAR2", "X", "2024-01-01", "2024-01-05"), ep("P10", "VAR2", "Y", "2024-01-06", "2024-01-10")
+  )
+
+  run_it <- function(batch_flag, batch_size = NULL) {
+    con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+    on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+    uni_hive_dir <- file.path(tempdir(), paste0("create_multi_batching_equiv_uni_", batch_flag))
+    unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
+    on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
+    dir.create(uni_hive_dir, recursive = TRUE, showWarnings = FALSE)
+    DBI::dbWriteTable(con, "uni_epi_input", uni_epi, overwrite = TRUE)
+    DBI::dbExecute(
+      con,
+      sprintf(
+        "COPY uni_epi_input TO '%s' (FORMAT PARQUET, PARTITION_BY (variable_id))",
+        uni_hive_dir
+      )
+    )
+
+    sv_meta <- data.table::data.table(variable_id = c("VAR1", "VAR2"), batch = batch_flag, data_type = "CHAR")
+    output_dir <- file.path(tempdir(), paste0("create_multi_batching_equiv_out_", batch_flag))
+    unlink(output_dir, recursive = TRUE, force = TRUE)
+    on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+    args <- list(
+      study_variables = sv_meta, con = con, d3_univariate_episodes_path = uni_hive_dir,
+      output_path = output_dir, person_ids = paste0("P", 1:10),
+      batch_column = "batch", data_type_col = "data_type"
+    )
+    if (!is.null(batch_size)) args$batch_size <- batch_size
+    do.call(create_multivariate_episodes, args)
+
+    # Count batch files before this function's on.exit cleanup removes
+    # output_dir, since the caller only gets the return value back.
+    n_batch_files <- length(list.files(output_dir, pattern = "\\.parquet$"))
+
+    out <- data.table::as.data.table(DBI::dbGetQuery(
+      con,
+      sprintf("SELECT * FROM read_parquet('%s')", file.path(output_dir, "*.parquet"))
+    ))
+    out[, start_episode := as.Date(start_episode)]
+    out[, end_episode := as.Date(end_episode)]
+    data.table::setorder(out, person_id, start_episode)
+    list(data = out[], n_batch_files = n_batch_files)
+  }
+
+  unbatched <- run_it(FALSE)
+  batched <- run_it(TRUE, batch_size = 2L)
+
+  # single-pass path -> one file; 10 persons / batch_size 2 -> 5 batch files
+  testthat::expect_equal(unbatched$n_batch_files, 1)
+  testthat::expect_equal(batched$n_batch_files, 5)
+
+  testthat::expect_equal(unbatched$data, batched$data)
+})
+
+testthat::test_that("create_multivariate_episodes: batch_size threshold alone triggers batching even with batch=FALSE", {
+  # do_batch (from the batch_column) is one trigger; n_persons > batch_size
+  # is the other, independent trigger. This exercises the latter on its
+  # own to make sure the size-based fallback isn't accidentally gated on
+  # the batch column too.
+  ep <- function(person, variable_id, value, start, end) {
+    data.frame(
+      person_id = person, variable_id = variable_id, value = value,
+      start_episode = as.Date(start), end_episode = as.Date(end),
+      stringsAsFactors = FALSE
+    )
+  }
+  uni_epi <- do.call(rbind, lapply(1:6, function(i) {
+    rbind(
+      ep(paste0("P", i), "VAR1", "A", "2024-01-01", "2024-01-10"),
+      ep(paste0("P", i), "VAR2", "X", "2024-01-01", "2024-01-10")
+    )
+  }))
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  uni_hive_dir <- file.path(tempdir(), "create_multi_size_trigger_uni_hive")
+  unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
+  on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
+  dir.create(uni_hive_dir, recursive = TRUE, showWarnings = FALSE)
+  DBI::dbWriteTable(con, "uni_epi_input", uni_epi, overwrite = TRUE)
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "COPY uni_epi_input TO '%s' (FORMAT PARQUET, PARTITION_BY (variable_id))",
+      uni_hive_dir
+    )
+  )
+
+  sv_meta <- data.table::data.table(variable_id = c("VAR1", "VAR2"), batch = FALSE, data_type = "CHAR")
+  output_dir <- file.path(tempdir(), "create_multi_size_trigger_out")
+  unlink(output_dir, recursive = TRUE, force = TRUE)
+  on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  # The batching fallback logs via logger::log_warn() (not base R warning()),
+  # matching how progress is logged elsewhere in this function, so it isn't
+  # observable via expect_warning(). Assert on the resulting behavior
+  # instead: batching actually split the cohort into multiple batch files.
+  # 6 persons > batch_size 2, with batch = FALSE - the size threshold alone
+  # must trigger batching.
+  create_multivariate_episodes(
+    study_variables = sv_meta,
+    con = con,
+    d3_univariate_episodes_path = uni_hive_dir,
+    output_path = output_dir,
+    person_ids = paste0("P", 1:6),
+    batch_size = 2L,
+    batch_column = "batch",
+    data_type_col = "data_type"
+  )
+
+  # 6 persons / batch_size 2 -> 3 batches
+  batch_files <- list.files(output_dir, pattern = "\\.parquet$")
+  testthat::expect_equal(length(batch_files), 3)
+
+  actual <- data.table::as.data.table(DBI::dbGetQuery(
+    con,
+    sprintf("SELECT * FROM read_parquet('%s')", file.path(output_dir, "*.parquet"))
+  ))
+  # one constant-combination episode per person
+  testthat::expect_equal(nrow(actual), 6)
+})
+
+testthat::test_that("create_multivariate_episodes only processes variable_id(s) declared in study_variables", {
+  # Regression test: multivariate_episodes_pipeline() builds a list_sv
+  # table from study_variables$variable_id and filters multi_epi_1_explosion.sql
+  # to it (R/multivariate_episodes_pipeline.R, multi_epi_1_explosion.sql).
+  # create_multivariate_episodes() currently has no equivalent filter --
+  # multi_initial.sql reads read_parquet({d3_univariate_episodes_path}) with
+  # no variable_id restriction at all (its list_sv join is commented out).
+  # study_variables here only declares VAR1/VAR2; VAR3 is present in the
+  # univariate input but undeclared, and changes value partway through the
+  # study period for P1. An undeclared variable leaking in doesn't just add
+  # a stray output column -- since combination/episode boundaries are
+  # driven by every active variable the sweep-line SQL sees, VAR3's change
+  # would incorrectly fragment P1's episode into two.
+  ep <- function(person, variable_id, value, start, end) {
+    data.frame(
+      person_id = person, variable_id = variable_id, value = value,
+      start_episode = as.Date(start), end_episode = as.Date(end),
+      stringsAsFactors = FALSE
+    )
+  }
+  uni_epi <- rbind(
+    ep("P1", "VAR1", "A", "2024-01-01", "2024-01-10"),
+    ep("P1", "VAR2", "X", "2024-01-01", "2024-01-10"),
+    ep("P1", "VAR3", "M", "2024-01-01", "2024-01-05"), ep("P1", "VAR3", "N", "2024-01-06", "2024-01-10"),
+    ep("P2", "VAR1", "A", "2024-01-01", "2024-01-04"), ep("P2", "VAR1", "B", "2024-01-05", "2024-01-10"),
+    ep("P2", "VAR2", "X", "2024-01-01", "2024-01-10"),
+    ep("P2", "VAR3", "M", "2024-01-01", "2024-01-10")
+  )
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  uni_hive_dir <- file.path(tempdir(), "create_multi_undeclared_var_uni_hive")
+  unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
+  on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
+  dir.create(uni_hive_dir, recursive = TRUE, showWarnings = FALSE)
+  DBI::dbWriteTable(con, "uni_epi_input", uni_epi, overwrite = TRUE)
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "COPY uni_epi_input TO '%s' (FORMAT PARQUET, PARTITION_BY (variable_id))",
+      uni_hive_dir
+    )
+  )
+
+  # Only VAR1/VAR2 declared -- VAR3 must not affect output at all.
+  sv_meta <- data.table::data.table(
+    variable_id = c("VAR1", "VAR2"),
+    batch = FALSE,
+    data_type = "CHAR"
+  )
+  output_dir <- file.path(tempdir(), "create_multi_undeclared_var_out")
+  unlink(output_dir, recursive = TRUE, force = TRUE)
+  on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  create_multivariate_episodes(
+    study_variables = sv_meta,
+    con = con,
+    d3_univariate_episodes_path = uni_hive_dir,
+    output_path = output_dir,
+    person_ids = c("P1", "P2"),
+    batch_column = "batch",
+    data_type_col = "data_type"
+  )
+
+  actual <- data.table::as.data.table(DBI::dbGetQuery(
+    con,
+    sprintf("SELECT * FROM read_parquet('%s')", file.path(output_dir, "*.parquet"))
+  ))
+  actual[, start_episode := as.Date(start_episode)]
+  actual[, end_episode := as.Date(end_episode)]
+  data.table::setorder(actual, person_id, start_episode)
+
+  testthat::expect_false("VAR3" %in% names(actual))
+
+  expected <- reference_combine(uni_epi[uni_epi$variable_id %in% c("VAR1", "VAR2"), ])
+  data.table::setcolorder(actual, names(expected))
+
+  # P1 must stay a single episode -- VAR3's undeclared mid-period change
+  # must not fragment it.
+  testthat::expect_equal(nrow(actual[actual$person_id == "P1", ]), 1)
+  testthat::expect_equal(nrow(actual), 3)
   testthat::expect_equal(actual, expected)
 })
