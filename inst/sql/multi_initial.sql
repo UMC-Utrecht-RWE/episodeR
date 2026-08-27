@@ -2,6 +2,11 @@
 -- builds the combination timeline directly from new_variables_ids using a
 -- sweep-line approach, instead of exploding to one row per person/var/day
 -- and re-collapsing it. dim_var and new_variables_ids are unchanged below.
+--
+-- Filters to i_batch_persons, written by the caller before each run --
+-- containing every person_id for a single-pass (unbatched) run, or just
+-- one chunk's worth when batching. There's no separate unbatched variant:
+-- an unbatched run is just a batched run with one batch covering everyone.
 
 DROP TABLE IF EXISTS dim_var;
 
@@ -10,6 +15,8 @@ DROP TABLE IF EXISTS new_variables_ids;
 CREATE OR REPLACE TABLE initial AS (
     SELECT episodes.*
     FROM read_parquet({d3_univariate_episodes_path}) episodes
+    INNER JOIN i_batch_persons ibp
+        ON episodes.person_id = ibp.person_id
     INNER JOIN list_sv lsv ON episodes.variable_id = lsv.variable_id
 );
 
@@ -28,7 +35,7 @@ CREATE TABLE dim_var AS (
             SELECT
                 *
             FROM
-                initial 
+                initial
         ) episodes_filtered
     GROUP BY
         episodes_filtered.variable_id,
@@ -46,7 +53,7 @@ CREATE TABLE new_variables_ids AS (
             SELECT
                 *
             FROM
-                initial 
+                initial
         ) episodes_filtered
         INNER JOIN dim_var L ON L.variable_id = episodes_filtered.variable_id
         AND (
