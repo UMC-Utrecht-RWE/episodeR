@@ -31,23 +31,34 @@ testthat::test_that("create_univariate_episodes + create_multivariate_episodes p
   # dated events (some before start_study_date, to exercise look-back/MRR
   # cropping; some NA values, to exercise NULL handling); ~10% of pairs are
   # skipped entirely, to exercise the missing-person gap-fill default.
-  candidate_days <- seq(as.Date("2023-09-01"), as.Date("2024-11-30"), by = "day")
+  candidate_days <- seq(
+    as.Date("2023-09-01"),
+    as.Date("2024-11-30"),
+    by = "day"
+  )
   concept_rows <- vector("list", n_persons * n_vars)
   idx <- 0L
   for (p in persons) {
     for (k in seq_len(n_vars)) {
       idx <- idx + 1L
-      if (runif(1) < 0.10) next
+      if (runif(1) < 0.10) {
+        next
+      }
 
       n_events <- sample(1:3, 1, prob = c(0.5, 0.3, 0.2))
       event_dates <- sort(sample(candidate_days, n_events))
-      event_values <- sample(c(value_pool, NA_character_), n_events,
-        replace = TRUE, prob = c(0.3, 0.3, 0.3, 0.1)
+      event_values <- sample(
+        c(value_pool, NA_character_),
+        n_events,
+        replace = TRUE,
+        prob = c(0.3, 0.3, 0.3, 0.1)
       )
 
       concept_rows[[idx]] <- data.frame(
-        person_id = p, concept_id = concept_ids[k],
-        date = event_dates, value = event_values,
+        person_id = p,
+        concept_id = concept_ids[k],
+        date = event_dates,
+        value = event_values,
         stringsAsFactors = FALSE
       )
     }
@@ -86,7 +97,11 @@ testthat::test_that("create_univariate_episodes + create_multivariate_episodes p
   }
 
   read_multi <- function(con, output_dir) {
-    read_glob <- if (dir.exists(output_dir)) file.path(output_dir, "*.parquet") else output_dir
+    read_glob <- if (dir.exists(output_dir)) {
+      file.path(output_dir, "*.parquet")
+    } else {
+      output_dir
+    }
     out <- data.table::as.data.table(DBI::dbGetQuery(
       con,
       sprintf("SELECT * FROM read_parquet('%s')", read_glob)
@@ -156,6 +171,7 @@ testthat::test_that("create_univariate_episodes + create_multivariate_episodes p
     study_variables = sv_meta,
     con = con_new,
     person_ids = persons,
+    sql_dir = sql_dir,
     start_study_date = as.character(start_study_date),
     end_date_missing_inclusion = as.character(end_study_date),
     output_hive_path = uni_new_dir,
