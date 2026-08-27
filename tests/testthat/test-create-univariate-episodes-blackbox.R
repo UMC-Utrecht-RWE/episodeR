@@ -328,3 +328,198 @@ testthat::test_that("create_univariate_episodes agrees with univariate_episodes_
 
   testthat::expect_equal(run_new(), run_old())
 })
+
+testthat::test_that("a gap-fill merges with an adjacent real episode of the same value", {
+  # Step 1's chain-merge only ever sees the "real" concept-derived episodes
+  # (episodes_raw / univariate_episodes) - it runs before steps 2/3 exist,
+  # so it cannot merge a real episode with a gap-fill or missing-person row
+  # steps 2/3 add afterward. If missing_set_to happens to equal a real
+  # episode's value, the resulting adjacent same-value rows are only
+  # merged by step 5. This test proves that actually happens end-to-end
+  # (not just that step 5's merge logic works in isolation, which
+  # test-univariate-step5-chain-merge.R already covers).
+  concepts <- data.frame(
+    person_id = "P1", concept_id = "C1", date = "2024-01-10", value = "A"
+  )
+  persons <- "P1"
+  sql_dir <- system.file(package = "episodeR", "sql/")
+
+  run_it <- function(missing_set_to) {
+    sv_meta <- data.frame(
+      concept_id = "C1", variable_id = "VAR1",
+      start_look_back = 5, end_look_back = 0,
+      missing_set_to = missing_set_to, batch = FALSE,
+      stringsAsFactors = FALSE
+    )
+    con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+    on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+    DBI::dbWriteTable(con, "D3_CONCEPTS", concepts, overwrite = TRUE)
+    hive_dir <- file.path(tempdir(), paste0("create_uni_gapfill_merge_", missing_set_to))
+    unlink(hive_dir, recursive = TRUE, force = TRUE)
+    on.exit(unlink(hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+    create_univariate_episodes(
+      study_variables = sv_meta,
+      con = con,
+      person_ids = persons,
+      sql_dir = sql_dir,
+      start_study_date = "2024-01-01",
+      end_date_missing_inclusion = "2024-01-31",
+      output_hive_path = hive_dir,
+      batch_column = "batch",
+      missing_col = "missing_set_to"
+    )
+
+    out <- data.table::as.data.table(DBI::dbGetQuery(
+      con,
+      sprintf(
+        "SELECT person_id, variable_id, value, start_episode, end_episode
+         FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)",
+        hive_dir
+      )
+    ))
+    out[, start_episode := as.Date(start_episode)]
+    out[, end_episode := as.Date(end_episode)]
+    data.table::setorder(out, start_episode)
+    out[]
+  }
+
+  # missing_set_to = "A" collides with the real episode's value: the
+  # before_first fill [01-01,01-09]="A", the real episode
+  # [01-10,01-15]="A", and the after_last fill [01-16,01-31]="A" are all
+  # adjacent and same-valued, so step 5 must collapse them into one
+  # episode spanning the whole study period.
+  colliding <- run_it("A")
+  testthat::expect_equal(nrow(colliding), 1)
+  testthat::expect_equal(colliding$value, "A")
+  testthat::expect_equal(colliding$start_episode, as.Date("2024-01-01"))
+  testthat::expect_equal(colliding$end_episode, as.Date("2024-01-31"))
+
+  # Negative control: a non-colliding missing_set_to produces the naive
+  # 3-episode result instead, confirming the single-episode result above
+  # is genuinely value-driven and not an artefact of the date boundaries.
+  non_colliding <- run_it("MISSING")
+  testthat::expect_equal(nrow(non_colliding), 3)
+  testthat::expect_equal(non_colliding$value, c("MISSING", "A", "MISSING"))
+  testthat::expect_equal(non_colliding$start_episode, as.Date(c("2024-01-01", "2024-01-10", "2024-01-16")))
+  testthat::expect_equal(non_colliding$end_episode, as.Date(c("2024-01-09", "2024-01-15", "2024-01-31")))
+})
+
+testthat::test_that("a gap-fill merges with an adjacent real episode when both are NULL", {
+  # Same mechanism as the previous test, but for the default
+  # missing_col = NULL path (gap-fills become SQL NULL) colliding with a
+  # real concept value that is itself NULL, rather than an explicit
+  # missing_set_to string colliding with a real string value.
+  concepts <- data.frame(
+    person_id = "P1", concept_id = "C1", date = "2024-01-10",
+    value = NA_character_
+  )
+  sv_meta <- data.frame(
+    concept_id = "C1", variable_id = "VAR1",
+    start_look_back = 5, end_look_back = 0, batch = FALSE,
+    stringsAsFactors = FALSE
+  )
+  persons <- "P1"
+  sql_dir <- system.file(package = "episodeR", "sql/")
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  DBI::dbWriteTable(con, "D3_CONCEPTS", concepts, overwrite = TRUE)
+  hive_dir <- file.path(tempdir(), "create_uni_gapfill_merge_null")
+  unlink(hive_dir, recursive = TRUE, force = TRUE)
+  on.exit(unlink(hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  create_univariate_episodes(
+    study_variables = sv_meta,
+    con = con,
+    person_ids = persons,
+    sql_dir = sql_dir,
+    start_study_date = "2024-01-01",
+    end_date_missing_inclusion = "2024-01-31",
+    output_hive_path = hive_dir,
+    batch_column = "batch"
+    # missing_col intentionally omitted -> gap-fills use NULL
+  )
+
+  out <- data.table::as.data.table(DBI::dbGetQuery(
+    con,
+    sprintf(
+      "SELECT person_id, variable_id, value, start_episode, end_episode
+       FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)",
+      hive_dir
+    )
+  ))
+  out[, start_episode := as.Date(start_episode)]
+  out[, end_episode := as.Date(end_episode)]
+
+  testthat::expect_equal(nrow(out), 1)
+  testthat::expect_true(is.na(out$value))
+  testthat::expect_equal(out$start_episode, as.Date("2024-01-01"))
+  testthat::expect_equal(out$end_episode, as.Date("2024-01-31"))
+})
+
+testthat::test_that("create_univariate_episodes output stays within the study period across boundary-stress scenarios", {
+  # Forward-looking regression test for the bounds guarantee that
+  # create_univariate_episodes_4_trim_to_study_period.sql currently
+  # enforces as a backstop. step 1's `trimmed` CTE already clamps every
+  # real episode, and steps 2/3 only ever construct rows from those
+  # already-bounded values (see
+  # test-create-univariate-episodes-step4-redundancy.R for the proof this
+  # holds and step 4 is a no-op given that). This test asserts the
+  # end-to-end *output* invariant directly, independent of whether step 4
+  # stays in the pipeline, so it keeps this guarantee covered if/when step
+  # 4 is removed.
+  concepts <- rbind(
+    # P1: window lands exactly on [start_study_date, end_study_date] - no
+    # clamping needed, exercises the exact-boundary edge.
+    data.frame(person_id = "P1", concept_id = "C1", date = "2024-01-01", value = "A"),
+    # P2: a 365-day look-back from well before the study period extends
+    # far past both boundaries - step 1 must clamp both ends.
+    data.frame(person_id = "P2", concept_id = "C1", date = "2023-06-01", value = "A")
+    # P3 is deliberately absent from D3_CONCEPTS entirely (step 3 fill).
+  )
+  sv_meta <- data.frame(
+    concept_id = "C1", variable_id = "VAR1",
+    start_look_back = 365, end_look_back = 0,
+    missing_set_to = "MISSING", batch = FALSE,
+    stringsAsFactors = FALSE
+  )
+  persons <- c("P1", "P2", "P3")
+  sql_dir <- system.file(package = "episodeR", "sql/")
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  DBI::dbWriteTable(con, "D3_CONCEPTS", concepts, overwrite = TRUE)
+
+  hive_dir <- file.path(tempdir(), "create_uni_bounds_invariant")
+  unlink(hive_dir, recursive = TRUE, force = TRUE)
+  on.exit(unlink(hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  create_univariate_episodes(
+    study_variables = sv_meta,
+    con = con,
+    person_ids = persons,
+    sql_dir = sql_dir,
+    start_study_date = "2024-01-01",
+    end_date_missing_inclusion = "2024-01-31",
+    output_hive_path = hive_dir,
+    batch_column = "batch",
+    missing_col = "missing_set_to"
+  )
+
+  out <- data.table::as.data.table(DBI::dbGetQuery(
+    con,
+    sprintf(
+      "SELECT person_id, variable_id, value, start_episode, end_episode
+       FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)",
+      hive_dir
+    )
+  ))
+  out[, start_episode := as.Date(start_episode)]
+  out[, end_episode := as.Date(end_episode)]
+
+  testthat::expect_true(nrow(out) > 0)
+  testthat::expect_true(all(out$start_episode >= as.Date("2024-01-01")))
+  testthat::expect_true(all(out$end_episode <= as.Date("2024-01-31")))
+  testthat::expect_true(all(out$start_episode <= out$end_episode))
+})
