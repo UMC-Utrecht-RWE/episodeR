@@ -82,17 +82,7 @@ FROM grouped g
 JOIN person_bounds pb ON g.person_id = pb.person_id
 GROUP BY g.person_id, g.combination, g.grp, pb.max_real_day;
 
-CREATE OR REPLACE TABLE dim_combination AS
-SELECT 
-    combination,
-    ROW_NUMBER() OVER (ORDER BY combination) AS dic_index
-FROM (
-    SELECT DISTINCT combination 
-    FROM multivariate_episode
-);
 
-
---NEW 14
 -- Step 2b: Pivot multivariate_episode (list-of-int_var_id combination
 -- column) into the wide person x episode x variable_id format that the
 -- original pipeline produced via R's dcast(). This replaces the R-side
