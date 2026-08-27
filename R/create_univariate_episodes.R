@@ -25,7 +25,7 @@
 ##' @param start_study_date Study period start date.
 ##' @param end_date_missing_inclusion Study period end date.
 ##' @param output_hive_path Directory path where parquet hive output
-##' partitions will be written after each full 5-step pipeline execution.
+##' partitions will be written after each full 4-step pipeline execution.
 ##' @param batch_size Maximum number of persons per batch. Cohorts larger than
 ##' this are split into batches, even for variables not flagged via
 ##' batch_column; smaller cohorts run as a single pass. Defaults to 50000 --
@@ -52,16 +52,17 @@
 #' @import data.table
 #' @export
 create_univariate_episodes <- function(
-    study_variables,
-    con,
-    person_ids = NULL,
-    concepts_table = "D3_CONCEPTS",
-    start_study_date,
-    end_date_missing_inclusion,
-    output_hive_path,
-    batch_size = 50000L,
-    batch_column = "batch",
-    missing_col = NULL) {
+  study_variables,
+  con,
+  person_ids = NULL,
+  concepts_table = "D3_CONCEPTS",
+  start_study_date,
+  end_date_missing_inclusion,
+  output_hive_path,
+  batch_size = 50000L,
+  batch_column = "batch",
+  missing_col = NULL
+) {
   if (missing(output_hive_path) || !nzchar(output_hive_path)) {
     stop("output_hive_path must be provided and non-empty.")
   }
@@ -146,9 +147,11 @@ create_univariate_episodes <- function(
     start_study_date = sprintf("'%s'", as.character(start_study_date)),
     end_study_date = sprintf("'%s'", as.character(end_date_missing_inclusion))
   )
-  run_univariate_pipeline <- function(sv_subset,
-                                      person_filter_query,
-                                      output_hive_path) {
+  run_univariate_pipeline <- function(
+    sv_subset,
+    person_filter_query,
+    output_hive_path
+  ) {
     if (nrow(sv_subset) == 0) {
       return()
     }
@@ -174,7 +177,10 @@ create_univariate_episodes <- function(
 
     picard::execute_sql_file(
       sql = picard::load_sql_query(
-        file.path(sql_dir, "create_univariate_episodes_1_generate_initial_spells.sql"),
+        file.path(
+          sql_dir,
+          "create_univariate_episodes_1_generate_initial_spells.sql"
+        ),
         params = c(
           list(
             concept_id_list = paste(
@@ -198,7 +204,10 @@ create_univariate_episodes <- function(
 
     picard::execute_sql_file(
       sql = picard::load_sql_query(
-        file.path(sql_dir, "create_univariate_episodes_3_add_missing_persons.sql"),
+        file.path(
+          sql_dir,
+          "create_univariate_episodes_3_add_missing_persons.sql"
+        ),
         params = params_common
       ),
       conn = con
@@ -206,15 +215,10 @@ create_univariate_episodes <- function(
 
     picard::execute_sql_file(
       sql = picard::load_sql_query(
-        file.path(sql_dir, "create_univariate_episodes_4_trim_to_study_period.sql"),
-        params = params_common
-      ),
-      conn = con
-    )
-
-    picard::execute_sql_file(
-      sql = picard::load_sql_query(
-        file.path(sql_dir, "create_univariate_episodes_5_chain_merge_episodes.sql")
+        file.path(
+          sql_dir,
+          "create_univariate_episodes_4_chain_merge_episodes.sql"
+        )
       ),
       conn = con
     )
