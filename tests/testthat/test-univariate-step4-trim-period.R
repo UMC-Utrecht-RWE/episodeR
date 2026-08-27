@@ -1,5 +1,5 @@
-## Tests for uni_epi_4_trim_to_study_period.sql
-## Input/output: episodes_complete (modified in place: DELETE then UPDATE)
+# Tests for uni_epi_4_trim_to_study_period.sql
+# Input/output: episodes_complete (modified in place: DELETE then UPDATE)
 
 params <- list(start_study_date = "'2024-01-01'", end_study_date = "'2024-01-31'")
 
@@ -109,7 +109,8 @@ test_that("10 persons exercise deletion, clamping, and untouched cases together,
     "SELECT * FROM episodes_complete ORDER BY person_id, start_episode"
   ))
 
-  expect_equal(nrow(out), 8) # P1, P2, and P8's outside episode are gone
+  # P1, P2, and P8's outside episode are gone
+  expect_equal(nrow(out), 8)
   expect_setequal(unique(out$person_id), c("P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10"))
 
   expect_equal(as.Date(out[person_id == "P3"]$start_episode), as.Date("2024-01-01"))
