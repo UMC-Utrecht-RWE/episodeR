@@ -8,10 +8,10 @@ read_sql(filename)
 }
 \arguments{
 \item{filename}{Name of the SQL file inside \code{inst/sql}, e.g.
-"multi_initial.sql".}
+"create_multivariate_episodes_1_encode_variables.sql".}
 }
 \value{
-A single string with the file's contents, lines joined by "\n".
+A single string with the file's contents.
 }
 \description{
 Reads a SQL script from the package's installed \code{inst/sql} directory as a

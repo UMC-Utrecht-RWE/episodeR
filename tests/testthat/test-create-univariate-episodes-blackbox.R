@@ -17,22 +17,77 @@ testthat::test_that("create_univariate_episodes produces correct output across 1
   # entirely absent from concept data, and independence between two
   # variables (VAR1/VAR2) and across persons.
   concepts <- rbind(
-    data.frame(person_id = "P1", concept_id = "C1", date = "2024-01-10", value = "A"),
-    data.frame(person_id = "P2", concept_id = "C1", date = c("2024-01-01", "2024-01-07"), value = c("A", "B")),
-    data.frame(person_id = "P4", concept_id = "C1", date = c("2024-01-02", "2024-01-20"), value = c("A", "A")),
-    data.frame(person_id = "P5", concept_id = "C1", date = "2023-01-01", value = "A"),
-    data.frame(person_id = "P6", concept_id = "C1", date = "2023-12-29", value = "A"),
-    data.frame(person_id = "P7", concept_id = "C1", date = c("2024-01-01", "2024-01-03"), value = c("A", "A")),
-    data.frame(person_id = "P8", concept_id = "C1", date = "2024-01-01", value = "A"),
-    data.frame(person_id = "P9", concept_id = "C2", date = "2024-01-15", value = "Z")
+    data.frame(
+      person_id = "P1",
+      concept_id = "C1",
+      date = "2024-01-10",
+      value = "A"
+    ),
+    data.frame(
+      person_id = "P2",
+      concept_id = "C1",
+      date = c("2024-01-01", "2024-01-07"),
+      value = c("A", "B")
+    ),
+    data.frame(
+      person_id = "P4",
+      concept_id = "C1",
+      date = c("2024-01-02", "2024-01-20"),
+      value = c("A", "A")
+    ),
+    data.frame(
+      person_id = "P5",
+      concept_id = "C1",
+      date = "2023-01-01",
+      value = "A"
+    ),
+    data.frame(
+      person_id = "P6",
+      concept_id = "C1",
+      date = "2023-12-29",
+      value = "A"
+    ),
+    data.frame(
+      person_id = "P7",
+      concept_id = "C1",
+      date = c("2024-01-01", "2024-01-03"),
+      value = c("A", "A")
+    ),
+    data.frame(
+      person_id = "P8",
+      concept_id = "C1",
+      date = "2024-01-01",
+      value = "A"
+    ),
+    data.frame(
+      person_id = "P9",
+      concept_id = "C2",
+      date = "2024-01-15",
+      value = "Z"
+    )
     # P3 and P10 are deliberately absent from D3_CONCEPTS entirely.
   )
   sv_meta <- rbind(
-    data.frame(concept_id = "C1", variable_id = "VAR1", start_look_back = 5, end_look_back = 0, missing_set_to = "MISSING", batch = FALSE, stringsAsFactors = FALSE),
-    data.frame(concept_id = "C2", variable_id = "VAR2", start_look_back = 5, end_look_back = 0, missing_set_to = "MISSING_2", batch = FALSE, stringsAsFactors = FALSE)
+    data.frame(
+      concept_id = "C1",
+      variable_id = "VAR1",
+      start_look_back = 5,
+      end_look_back = 0,
+      missing_set_to = "MISSING",
+      batch = FALSE,
+      stringsAsFactors = FALSE
+    ),
+    data.frame(
+      concept_id = "C2",
+      variable_id = "VAR2",
+      start_look_back = 5,
+      end_look_back = 0,
+      missing_set_to = "MISSING_2",
+      batch = FALSE,
+      stringsAsFactors = FALSE
+    )
   )
   persons <- paste0("P", 1:10)
-  sql_dir <- system.file(package = "episodeR", "sql/")
 
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
@@ -46,7 +101,6 @@ testthat::test_that("create_univariate_episodes produces correct output across 1
     study_variables = sv_meta,
     con = con,
     person_ids = persons,
-    sql_dir = sql_dir,
     start_study_date = "2024-01-01",
     end_date_missing_inclusion = "2024-01-31",
     output_hive_path = hive_dir,
@@ -68,64 +122,179 @@ testthat::test_that("create_univariate_episodes produces correct output across 1
 
   expected <- data.table::data.table(
     person_id = c(
-      "P1", "P1", "P1", "P1",
-      "P10", "P10",
-      "P2", "P2", "P2", "P2",
-      "P3", "P3",
-      "P4", "P4", "P4", "P4", "P4", "P4",
-      "P5", "P5",
-      "P6", "P6", "P6",
-      "P7", "P7", "P7",
-      "P8", "P8", "P8",
-      "P9", "P9", "P9", "P9"
+      "P1",
+      "P1",
+      "P1",
+      "P1",
+      "P10",
+      "P10",
+      "P2",
+      "P2",
+      "P2",
+      "P2",
+      "P3",
+      "P3",
+      "P4",
+      "P4",
+      "P4",
+      "P4",
+      "P4",
+      "P4",
+      "P5",
+      "P5",
+      "P6",
+      "P6",
+      "P6",
+      "P7",
+      "P7",
+      "P7",
+      "P8",
+      "P8",
+      "P8",
+      "P9",
+      "P9",
+      "P9",
+      "P9"
     ),
     variable_id = c(
-      "VAR1", "VAR1", "VAR1", "VAR2",
-      "VAR1", "VAR2",
-      "VAR1", "VAR1", "VAR1", "VAR2",
-      "VAR1", "VAR2",
-      "VAR1", "VAR1", "VAR1", "VAR1", "VAR1", "VAR2",
-      "VAR1", "VAR2",
-      "VAR1", "VAR1", "VAR2",
-      "VAR1", "VAR1", "VAR2",
-      "VAR1", "VAR1", "VAR2",
-      "VAR1", "VAR2", "VAR2", "VAR2"
+      "VAR1",
+      "VAR1",
+      "VAR1",
+      "VAR2",
+      "VAR1",
+      "VAR2",
+      "VAR1",
+      "VAR1",
+      "VAR1",
+      "VAR2",
+      "VAR1",
+      "VAR2",
+      "VAR1",
+      "VAR1",
+      "VAR1",
+      "VAR1",
+      "VAR1",
+      "VAR2",
+      "VAR1",
+      "VAR2",
+      "VAR1",
+      "VAR1",
+      "VAR2",
+      "VAR1",
+      "VAR1",
+      "VAR2",
+      "VAR1",
+      "VAR1",
+      "VAR2",
+      "VAR1",
+      "VAR2",
+      "VAR2",
+      "VAR2"
     ),
     value = c(
-      "MISSING", "A", "MISSING", "MISSING_2",
-      "MISSING", "MISSING_2",
-      "A", "B", "MISSING", "MISSING_2",
-      "MISSING", "MISSING_2",
-      "MISSING", "A", "MISSING", "A", "MISSING", "MISSING_2",
-      "MISSING", "MISSING_2",
-      "A", "MISSING", "MISSING_2",
-      "A", "MISSING", "MISSING_2",
-      "A", "MISSING", "MISSING_2",
-      "MISSING", "MISSING_2", "Z", "MISSING_2"
+      "MISSING",
+      "A",
+      "MISSING",
+      "MISSING_2",
+      "MISSING",
+      "MISSING_2",
+      "A",
+      "B",
+      "MISSING",
+      "MISSING_2",
+      "MISSING",
+      "MISSING_2",
+      "MISSING",
+      "A",
+      "MISSING",
+      "A",
+      "MISSING",
+      "MISSING_2",
+      "MISSING",
+      "MISSING_2",
+      "A",
+      "MISSING",
+      "MISSING_2",
+      "A",
+      "MISSING",
+      "MISSING_2",
+      "A",
+      "MISSING",
+      "MISSING_2",
+      "MISSING",
+      "MISSING_2",
+      "Z",
+      "MISSING_2"
     ),
     start_episode = as.Date(c(
-      "2024-01-01", "2024-01-10", "2024-01-16", "2024-01-01",
-      "2024-01-01", "2024-01-01",
-      "2024-01-01", "2024-01-07", "2024-01-13", "2024-01-01",
-      "2024-01-01", "2024-01-01",
-      "2024-01-01", "2024-01-02", "2024-01-08", "2024-01-20", "2024-01-26", "2024-01-01",
-      "2024-01-01", "2024-01-01",
-      "2024-01-01", "2024-01-04", "2024-01-01",
-      "2024-01-01", "2024-01-09", "2024-01-01",
-      "2024-01-01", "2024-01-07", "2024-01-01",
-      "2024-01-01", "2024-01-01", "2024-01-15", "2024-01-21"
+      "2024-01-01",
+      "2024-01-10",
+      "2024-01-16",
+      "2024-01-01",
+      "2024-01-01",
+      "2024-01-01",
+      "2024-01-01",
+      "2024-01-07",
+      "2024-01-13",
+      "2024-01-01",
+      "2024-01-01",
+      "2024-01-01",
+      "2024-01-01",
+      "2024-01-02",
+      "2024-01-08",
+      "2024-01-20",
+      "2024-01-26",
+      "2024-01-01",
+      "2024-01-01",
+      "2024-01-01",
+      "2024-01-01",
+      "2024-01-04",
+      "2024-01-01",
+      "2024-01-01",
+      "2024-01-09",
+      "2024-01-01",
+      "2024-01-01",
+      "2024-01-07",
+      "2024-01-01",
+      "2024-01-01",
+      "2024-01-01",
+      "2024-01-15",
+      "2024-01-21"
     )),
     end_episode = as.Date(c(
-      "2024-01-09", "2024-01-15", "2024-01-31", "2024-01-31",
-      "2024-01-31", "2024-01-31",
-      "2024-01-06", "2024-01-12", "2024-01-31", "2024-01-31",
-      "2024-01-31", "2024-01-31",
-      "2024-01-01", "2024-01-07", "2024-01-19", "2024-01-25", "2024-01-31", "2024-01-31",
-      "2024-01-31", "2024-01-31",
-      "2024-01-03", "2024-01-31", "2024-01-31",
-      "2024-01-08", "2024-01-31", "2024-01-31",
-      "2024-01-06", "2024-01-31", "2024-01-31",
-      "2024-01-31", "2024-01-14", "2024-01-20", "2024-01-31"
+      "2024-01-09",
+      "2024-01-15",
+      "2024-01-31",
+      "2024-01-31",
+      "2024-01-31",
+      "2024-01-31",
+      "2024-01-06",
+      "2024-01-12",
+      "2024-01-31",
+      "2024-01-31",
+      "2024-01-31",
+      "2024-01-31",
+      "2024-01-01",
+      "2024-01-07",
+      "2024-01-19",
+      "2024-01-25",
+      "2024-01-31",
+      "2024-01-31",
+      "2024-01-31",
+      "2024-01-31",
+      "2024-01-03",
+      "2024-01-31",
+      "2024-01-31",
+      "2024-01-08",
+      "2024-01-31",
+      "2024-01-31",
+      "2024-01-06",
+      "2024-01-31",
+      "2024-01-31",
+      "2024-01-31",
+      "2024-01-14",
+      "2024-01-20",
+      "2024-01-31"
     ))
   )
   data.table::setorder(expected, person_id, variable_id, start_episode)
@@ -143,36 +312,101 @@ testthat::test_that("create_univariate_episodes produces identical output whethe
   # must never change results. Reuses the same fixture as the "10
   # persons/2 variables" test above.
   concepts <- rbind(
-    data.frame(person_id = "P1", concept_id = "C1", date = "2024-01-10", value = "A"),
-    data.frame(person_id = "P2", concept_id = "C1", date = c("2024-01-01", "2024-01-07"), value = c("A", "B")),
-    data.frame(person_id = "P4", concept_id = "C1", date = c("2024-01-02", "2024-01-20"), value = c("A", "A")),
-    data.frame(person_id = "P5", concept_id = "C1", date = "2023-01-01", value = "A"),
-    data.frame(person_id = "P6", concept_id = "C1", date = "2023-12-29", value = "A"),
-    data.frame(person_id = "P7", concept_id = "C1", date = c("2024-01-01", "2024-01-03"), value = c("A", "A")),
-    data.frame(person_id = "P8", concept_id = "C1", date = "2024-01-01", value = "A"),
-    data.frame(person_id = "P9", concept_id = "C2", date = "2024-01-15", value = "Z")
+    data.frame(
+      person_id = "P1",
+      concept_id = "C1",
+      date = "2024-01-10",
+      value = "A"
+    ),
+    data.frame(
+      person_id = "P2",
+      concept_id = "C1",
+      date = c("2024-01-01", "2024-01-07"),
+      value = c("A", "B")
+    ),
+    data.frame(
+      person_id = "P4",
+      concept_id = "C1",
+      date = c("2024-01-02", "2024-01-20"),
+      value = c("A", "A")
+    ),
+    data.frame(
+      person_id = "P5",
+      concept_id = "C1",
+      date = "2023-01-01",
+      value = "A"
+    ),
+    data.frame(
+      person_id = "P6",
+      concept_id = "C1",
+      date = "2023-12-29",
+      value = "A"
+    ),
+    data.frame(
+      person_id = "P7",
+      concept_id = "C1",
+      date = c("2024-01-01", "2024-01-03"),
+      value = c("A", "A")
+    ),
+    data.frame(
+      person_id = "P8",
+      concept_id = "C1",
+      date = "2024-01-01",
+      value = "A"
+    ),
+    data.frame(
+      person_id = "P9",
+      concept_id = "C2",
+      date = "2024-01-15",
+      value = "Z"
+    )
   )
   persons <- paste0("P", 1:10)
-  sql_dir <- system.file(package = "episodeR", "sql/")
 
   run_it <- function(batch_flag, batch_size = NULL) {
     sv_meta <- rbind(
-      data.frame(concept_id = "C1", variable_id = "VAR1", start_look_back = 5, end_look_back = 0, missing_set_to = "MISSING", batch = batch_flag, stringsAsFactors = FALSE),
-      data.frame(concept_id = "C2", variable_id = "VAR2", start_look_back = 5, end_look_back = 0, missing_set_to = "MISSING_2", batch = batch_flag, stringsAsFactors = FALSE)
+      data.frame(
+        concept_id = "C1",
+        variable_id = "VAR1",
+        start_look_back = 5,
+        end_look_back = 0,
+        missing_set_to = "MISSING",
+        batch = batch_flag,
+        stringsAsFactors = FALSE
+      ),
+      data.frame(
+        concept_id = "C2",
+        variable_id = "VAR2",
+        start_look_back = 5,
+        end_look_back = 0,
+        missing_set_to = "MISSING_2",
+        batch = batch_flag,
+        stringsAsFactors = FALSE
+      )
     )
     con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
     on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
     DBI::dbWriteTable(con, "D3_CONCEPTS", concepts, overwrite = TRUE)
-    hive_dir <- file.path(tempdir(), paste0("create_uni_batching_equiv_", batch_flag))
+    hive_dir <- file.path(
+      tempdir(),
+      paste0("create_uni_batching_equiv_", batch_flag)
+    )
     unlink(hive_dir, recursive = TRUE, force = TRUE)
     on.exit(unlink(hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
     args <- list(
-      study_variables = sv_meta, con = con, person_ids = persons, sql_dir = sql_dir,
-      start_study_date = "2024-01-01", end_date_missing_inclusion = "2024-01-31",
-      output_hive_path = hive_dir, batch_column = "batch", missing_col = "missing_set_to"
+      study_variables = sv_meta,
+      con = con,
+      person_ids = persons,
+      start_study_date = "2024-01-01",
+      end_date_missing_inclusion = "2024-01-31",
+      output_hive_path = hive_dir,
+      batch_column = "batch",
+      missing_col = "missing_set_to"
     )
-    if (!is.null(batch_size)) args$batch_size <- batch_size
+    if (!is.null(batch_size)) {
+      args$batch_size <- batch_size
+    }
     do.call(create_univariate_episodes, args)
 
     out <- data.table::as.data.table(DBI::dbGetQuery(
@@ -204,27 +438,85 @@ testthat::test_that("create_univariate_episodes auto-batches by cohort size even
   # the cohort (single unbatched pass). Reuses the same fixture as the
   # "10 persons/2 variables" test above.
   concepts <- rbind(
-    data.frame(person_id = "P1", concept_id = "C1", date = "2024-01-10", value = "A"),
-    data.frame(person_id = "P2", concept_id = "C1", date = c("2024-01-01", "2024-01-07"), value = c("A", "B")),
-    data.frame(person_id = "P4", concept_id = "C1", date = c("2024-01-02", "2024-01-20"), value = c("A", "A")),
-    data.frame(person_id = "P5", concept_id = "C1", date = "2023-01-01", value = "A"),
-    data.frame(person_id = "P6", concept_id = "C1", date = "2023-12-29", value = "A"),
-    data.frame(person_id = "P7", concept_id = "C1", date = c("2024-01-01", "2024-01-03"), value = c("A", "A")),
-    data.frame(person_id = "P8", concept_id = "C1", date = "2024-01-01", value = "A"),
-    data.frame(person_id = "P9", concept_id = "C2", date = "2024-01-15", value = "Z")
+    data.frame(
+      person_id = "P1",
+      concept_id = "C1",
+      date = "2024-01-10",
+      value = "A"
+    ),
+    data.frame(
+      person_id = "P2",
+      concept_id = "C1",
+      date = c("2024-01-01", "2024-01-07"),
+      value = c("A", "B")
+    ),
+    data.frame(
+      person_id = "P4",
+      concept_id = "C1",
+      date = c("2024-01-02", "2024-01-20"),
+      value = c("A", "A")
+    ),
+    data.frame(
+      person_id = "P5",
+      concept_id = "C1",
+      date = "2023-01-01",
+      value = "A"
+    ),
+    data.frame(
+      person_id = "P6",
+      concept_id = "C1",
+      date = "2023-12-29",
+      value = "A"
+    ),
+    data.frame(
+      person_id = "P7",
+      concept_id = "C1",
+      date = c("2024-01-01", "2024-01-03"),
+      value = c("A", "A")
+    ),
+    data.frame(
+      person_id = "P8",
+      concept_id = "C1",
+      date = "2024-01-01",
+      value = "A"
+    ),
+    data.frame(
+      person_id = "P9",
+      concept_id = "C2",
+      date = "2024-01-15",
+      value = "Z"
+    )
   )
   persons <- paste0("P", 1:10)
-  sql_dir <- system.file(package = "episodeR", "sql/")
 
   run_it <- function(batch_size) {
     sv_meta <- rbind(
-      data.frame(concept_id = "C1", variable_id = "VAR1", start_look_back = 5, end_look_back = 0, missing_set_to = "MISSING", batch = FALSE, stringsAsFactors = FALSE),
-      data.frame(concept_id = "C2", variable_id = "VAR2", start_look_back = 5, end_look_back = 0, missing_set_to = "MISSING_2", batch = FALSE, stringsAsFactors = FALSE)
+      data.frame(
+        concept_id = "C1",
+        variable_id = "VAR1",
+        start_look_back = 5,
+        end_look_back = 0,
+        missing_set_to = "MISSING",
+        batch = FALSE,
+        stringsAsFactors = FALSE
+      ),
+      data.frame(
+        concept_id = "C2",
+        variable_id = "VAR2",
+        start_look_back = 5,
+        end_look_back = 0,
+        missing_set_to = "MISSING_2",
+        batch = FALSE,
+        stringsAsFactors = FALSE
+      )
     )
     con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
     on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
     DBI::dbWriteTable(con, "D3_CONCEPTS", concepts, overwrite = TRUE)
-    hive_dir <- file.path(tempdir(), paste0("create_uni_size_batching_", batch_size))
+    hive_dir <- file.path(
+      tempdir(),
+      paste0("create_uni_size_batching_", batch_size)
+    )
     unlink(hive_dir, recursive = TRUE, force = TRUE)
     on.exit(unlink(hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
@@ -232,7 +524,6 @@ testthat::test_that("create_univariate_episodes auto-batches by cohort size even
       study_variables = sv_meta,
       con = con,
       person_ids = persons,
-      sql_dir = sql_dir,
       start_study_date = "2024-01-01",
       end_date_missing_inclusion = "2024-01-31",
       output_hive_path = hive_dir,
@@ -267,14 +558,50 @@ testthat::test_that("create_univariate_episodes agrees with univariate_episodes_
   # for the same input. Suppresses the deprecation warning from the old
   # function so this test's output isn't cluttered by it.
   concepts <- rbind(
-    data.frame(person_id = "P1", concept_id = "C1", date = "2024-01-10", value = "A"),
-    data.frame(person_id = "P2", concept_id = "C1", date = c("2024-01-01", "2024-01-07"), value = c("A", "B")),
-    data.frame(person_id = "P4", concept_id = "C1", date = c("2024-01-02", "2024-01-20"), value = c("A", "A")),
-    data.frame(person_id = "P9", concept_id = "C2", date = "2024-01-15", value = "Z")
+    data.frame(
+      person_id = "P1",
+      concept_id = "C1",
+      date = "2024-01-10",
+      value = "A"
+    ),
+    data.frame(
+      person_id = "P2",
+      concept_id = "C1",
+      date = c("2024-01-01", "2024-01-07"),
+      value = c("A", "B")
+    ),
+    data.frame(
+      person_id = "P4",
+      concept_id = "C1",
+      date = c("2024-01-02", "2024-01-20"),
+      value = c("A", "A")
+    ),
+    data.frame(
+      person_id = "P9",
+      concept_id = "C2",
+      date = "2024-01-15",
+      value = "Z"
+    )
   )
   sv_meta <- rbind(
-    data.frame(concept_id = "C1", variable_id = "VAR1", start_look_back = 5, end_look_back = 0, missing_set_to = "MISSING", batch = FALSE, stringsAsFactors = FALSE),
-    data.frame(concept_id = "C2", variable_id = "VAR2", start_look_back = 5, end_look_back = 0, missing_set_to = "MISSING_2", batch = FALSE, stringsAsFactors = FALSE)
+    data.frame(
+      concept_id = "C1",
+      variable_id = "VAR1",
+      start_look_back = 5,
+      end_look_back = 0,
+      missing_set_to = "MISSING",
+      batch = FALSE,
+      stringsAsFactors = FALSE
+    ),
+    data.frame(
+      concept_id = "C2",
+      variable_id = "VAR2",
+      start_look_back = 5,
+      end_look_back = 0,
+      missing_set_to = "MISSING_2",
+      batch = FALSE,
+      stringsAsFactors = FALSE
+    )
   )
   persons <- c("P1", "P2", "P4", "P9")
   sql_dir <- system.file(package = "episodeR", "sql/")
@@ -287,13 +614,21 @@ testthat::test_that("create_univariate_episodes agrees with univariate_episodes_
     unlink(hive_dir, recursive = TRUE, force = TRUE)
     on.exit(unlink(hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
     create_univariate_episodes(
-      study_variables = sv_meta, con = con, person_ids = persons, sql_dir = sql_dir,
-      start_study_date = "2024-01-01", end_date_missing_inclusion = "2024-01-31",
-      output_hive_path = hive_dir, batch_column = "batch", missing_col = "missing_set_to"
+      study_variables = sv_meta,
+      con = con,
+      person_ids = persons,
+      start_study_date = "2024-01-01",
+      end_date_missing_inclusion = "2024-01-31",
+      output_hive_path = hive_dir,
+      batch_column = "batch",
+      missing_col = "missing_set_to"
     )
     out <- data.table::as.data.table(DBI::dbGetQuery(
       con,
-      sprintf("SELECT person_id, variable_id, value, start_episode, end_episode FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)", hive_dir)
+      sprintf(
+        "SELECT person_id, variable_id, value, start_episode, end_episode FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)",
+        hive_dir
+      )
     ))
     out[, start_episode := as.Date(start_episode)]
     out[, end_episode := as.Date(end_episode)]
@@ -310,15 +645,24 @@ testthat::test_that("create_univariate_episodes agrees with univariate_episodes_
     on.exit(unlink(hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
     testthat::expect_warning(
       univariate_episodes_pipeline(
-        study_variables = sv_meta, con = con, person_ids = persons, sql_dir = sql_dir,
-        start_study_date = "2024-01-01", end_date_missing_inclusion = "2024-01-31",
-        output_hive_path = hive_dir, batch_column = "batch", missing_col = "missing_set_to"
+        study_variables = sv_meta,
+        con = con,
+        person_ids = persons,
+        sql_dir = sql_dir,
+        start_study_date = "2024-01-01",
+        end_date_missing_inclusion = "2024-01-31",
+        output_hive_path = hive_dir,
+        batch_column = "batch",
+        missing_col = "missing_set_to"
       ),
       "will be deprecated"
     )
     out <- data.table::as.data.table(DBI::dbGetQuery(
       con,
-      sprintf("SELECT person_id, variable_id, value, start_episode, end_episode FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)", hive_dir)
+      sprintf(
+        "SELECT person_id, variable_id, value, start_episode, end_episode FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE)",
+        hive_dir
+      )
     ))
     out[, start_episode := as.Date(start_episode)]
     out[, end_episode := as.Date(end_episode)]
@@ -339,22 +683,31 @@ testthat::test_that("a gap-fill merges with an adjacent real episode of the same
   # (not just that step 5's merge logic works in isolation, which
   # test-univariate-step5-chain-merge.R already covers).
   concepts <- data.frame(
-    person_id = "P1", concept_id = "C1", date = "2024-01-10", value = "A"
+    person_id = "P1",
+    concept_id = "C1",
+    date = "2024-01-10",
+    value = "A"
   )
   persons <- "P1"
   sql_dir <- system.file(package = "episodeR", "sql/")
 
   run_it <- function(missing_set_to) {
     sv_meta <- data.frame(
-      concept_id = "C1", variable_id = "VAR1",
-      start_look_back = 5, end_look_back = 0,
-      missing_set_to = missing_set_to, batch = FALSE,
+      concept_id = "C1",
+      variable_id = "VAR1",
+      start_look_back = 5,
+      end_look_back = 0,
+      missing_set_to = missing_set_to,
+      batch = FALSE,
       stringsAsFactors = FALSE
     )
     con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
     on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
     DBI::dbWriteTable(con, "D3_CONCEPTS", concepts, overwrite = TRUE)
-    hive_dir <- file.path(tempdir(), paste0("create_uni_gapfill_merge_", missing_set_to))
+    hive_dir <- file.path(
+      tempdir(),
+      paste0("create_uni_gapfill_merge_", missing_set_to)
+    )
     unlink(hive_dir, recursive = TRUE, force = TRUE)
     on.exit(unlink(hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
@@ -362,7 +715,6 @@ testthat::test_that("a gap-fill merges with an adjacent real episode of the same
       study_variables = sv_meta,
       con = con,
       person_ids = persons,
-      sql_dir = sql_dir,
       start_study_date = "2024-01-01",
       end_date_missing_inclusion = "2024-01-31",
       output_hive_path = hive_dir,
@@ -401,8 +753,14 @@ testthat::test_that("a gap-fill merges with an adjacent real episode of the same
   non_colliding <- run_it("MISSING")
   testthat::expect_equal(nrow(non_colliding), 3)
   testthat::expect_equal(non_colliding$value, c("MISSING", "A", "MISSING"))
-  testthat::expect_equal(non_colliding$start_episode, as.Date(c("2024-01-01", "2024-01-10", "2024-01-16")))
-  testthat::expect_equal(non_colliding$end_episode, as.Date(c("2024-01-09", "2024-01-15", "2024-01-31")))
+  testthat::expect_equal(
+    non_colliding$start_episode,
+    as.Date(c("2024-01-01", "2024-01-10", "2024-01-16"))
+  )
+  testthat::expect_equal(
+    non_colliding$end_episode,
+    as.Date(c("2024-01-09", "2024-01-15", "2024-01-31"))
+  )
 })
 
 testthat::test_that("a gap-fill merges with an adjacent real episode when both are NULL", {
@@ -411,12 +769,17 @@ testthat::test_that("a gap-fill merges with an adjacent real episode when both a
   # real concept value that is itself NULL, rather than an explicit
   # missing_set_to string colliding with a real string value.
   concepts <- data.frame(
-    person_id = "P1", concept_id = "C1", date = "2024-01-10",
+    person_id = "P1",
+    concept_id = "C1",
+    date = "2024-01-10",
     value = NA_character_
   )
   sv_meta <- data.frame(
-    concept_id = "C1", variable_id = "VAR1",
-    start_look_back = 5, end_look_back = 0, batch = FALSE,
+    concept_id = "C1",
+    variable_id = "VAR1",
+    start_look_back = 5,
+    end_look_back = 0,
+    batch = FALSE,
     stringsAsFactors = FALSE
   )
   persons <- "P1"
@@ -433,7 +796,6 @@ testthat::test_that("a gap-fill merges with an adjacent real episode when both a
     study_variables = sv_meta,
     con = con,
     person_ids = persons,
-    sql_dir = sql_dir,
     start_study_date = "2024-01-01",
     end_date_missing_inclusion = "2024-01-31",
     output_hive_path = hive_dir,
@@ -459,29 +821,40 @@ testthat::test_that("a gap-fill merges with an adjacent real episode when both a
 })
 
 testthat::test_that("create_univariate_episodes output stays within the study period across boundary-stress scenarios", {
-  # Forward-looking regression test for the bounds guarantee that
-  # create_univariate_episodes_4_trim_to_study_period.sql currently
-  # enforces as a backstop. step 1's `trimmed` CTE already clamps every
-  # real episode, and steps 2/3 only ever construct rows from those
-  # already-bounded values (see
-  # test-create-univariate-episodes-step4-redundancy.R for the proof this
-  # holds and step 4 is a no-op given that). This test asserts the
-  # end-to-end *output* invariant directly, independent of whether step 4
-  # stays in the pipeline, so it keeps this guarantee covered if/when step
-  # 4 is removed.
+  # Regression test for the bounds guarantee. There is no dedicated
+  # clip-to-study-period step any more (the former step 4 was dropped as a
+  # provable no-op - see the git history of this file, and the comment
+  # atop create_univariate_episodes_4_chain_merge_episodes.sql, for the
+  # proof: step 1's `trimmed` CTE already clamps every real episode, and
+  # steps 2/3 only ever construct rows from those already-bounded values).
+  # This test asserts the end-to-end *output* invariant directly, so a
+  # future change to steps 1-3 that breaks it gets caught here.
   concepts <- rbind(
     # P1: window lands exactly on [start_study_date, end_study_date] - no
     # clamping needed, exercises the exact-boundary edge.
-    data.frame(person_id = "P1", concept_id = "C1", date = "2024-01-01", value = "A"),
+    data.frame(
+      person_id = "P1",
+      concept_id = "C1",
+      date = "2024-01-01",
+      value = "A"
+    ),
     # P2: a 365-day look-back from well before the study period extends
     # far past both boundaries - step 1 must clamp both ends.
-    data.frame(person_id = "P2", concept_id = "C1", date = "2023-06-01", value = "A")
+    data.frame(
+      person_id = "P2",
+      concept_id = "C1",
+      date = "2023-06-01",
+      value = "A"
+    )
     # P3 is deliberately absent from D3_CONCEPTS entirely (step 3 fill).
   )
   sv_meta <- data.frame(
-    concept_id = "C1", variable_id = "VAR1",
-    start_look_back = 365, end_look_back = 0,
-    missing_set_to = "MISSING", batch = FALSE,
+    concept_id = "C1",
+    variable_id = "VAR1",
+    start_look_back = 365,
+    end_look_back = 0,
+    missing_set_to = "MISSING",
+    batch = FALSE,
     stringsAsFactors = FALSE
   )
   persons <- c("P1", "P2", "P3")
@@ -499,7 +872,6 @@ testthat::test_that("create_univariate_episodes output stays within the study pe
     study_variables = sv_meta,
     con = con,
     person_ids = persons,
-    sql_dir = sql_dir,
     start_study_date = "2024-01-01",
     end_date_missing_inclusion = "2024-01-31",
     output_hive_path = hive_dir,

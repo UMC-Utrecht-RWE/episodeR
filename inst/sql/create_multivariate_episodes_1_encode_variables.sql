@@ -1,12 +1,12 @@
--- Batching-only variant of multi_initial.sql, used solely by
--- create_multivariate_episodes()'s batched fallback path (a safety net for
--- cohorts too large to fit in memory in one pass -- not the default code
--- path). Filters the univariate episodes read down to i_batch_persons,
--- written per-batch by the caller, so each batch's working set (dim_var,
--- new_variables_ids) only covers that batch's persons; also filters to
--- list_sv (built from study_variables$variable_id), same as multi_initial.sql.
--- Kept as a separate file rather than modifying multi_initial.sql so the
--- default single-pass path is completely unaffected.
+-- NOTE: EXPLODED is no longer created here. multi_epi_2_combine.sql now
+-- builds the combination timeline directly from new_variables_ids using a
+-- sweep-line approach, instead of exploding to one row per person/var/day
+-- and re-collapsing it. dim_var and new_variables_ids are unchanged below.
+--
+-- Filters to i_batch_persons, written by the caller before each run --
+-- containing every person_id for a single-pass (unbatched) run, or just
+-- one chunk's worth when batching. There's no separate unbatched variant:
+-- an unbatched run is just a batched run with one batch covering everyone.
 
 DROP TABLE IF EXISTS dim_var;
 
@@ -22,6 +22,7 @@ CREATE OR REPLACE TABLE initial AS (
 
 CREATE TABLE dim_var AS (
     SELECT
+        -- Here we create a lookup table so we can replace the string variable_id with an int
         episodes_filtered.variable_id,
         episodes_filtered.value,
         ROW_NUMBER() OVER (

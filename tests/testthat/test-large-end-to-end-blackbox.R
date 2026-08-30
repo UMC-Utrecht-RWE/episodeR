@@ -87,17 +87,20 @@ testthat::test_that("univariate_episodes_pipeline + multivariate_episodes_pipeli
   unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
-  univariate_episodes_pipeline(
-    study_variables = sv_meta,
-    con = con,
-    person_ids = persons,
-    sql_dir = sql_dir,
-    start_study_date = as.character(start_study_date),
-    end_date_missing_inclusion = as.character(end_study_date),
-    output_hive_path = uni_hive_dir,
-    batch_size = 6,
-    batch_column = "batch",
-    missing_col = "missing_set_to"
+  testthat::expect_warning(
+    univariate_episodes_pipeline(
+      study_variables = sv_meta,
+      con = con,
+      person_ids = persons,
+      sql_dir = sql_dir,
+      start_study_date = as.character(start_study_date),
+      end_date_missing_inclusion = as.character(end_study_date),
+      output_hive_path = uni_hive_dir,
+      batch_size = 6,
+      batch_column = "batch",
+      missing_col = "missing_set_to"
+    ),
+    "will be deprecated"
   )
 
   actual_uni <- data.table::as.data.table(DBI::dbGetQuery(
@@ -142,16 +145,19 @@ testthat::test_that("univariate_episodes_pipeline + multivariate_episodes_pipeli
   unlink(multi_output_dir, recursive = TRUE, force = TRUE)
   on.exit(unlink(multi_output_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
-  multivariate_episodes_pipeline(
-    study_variables = sv_meta,
-    con = con,
-    d3_univariate_episodes_path = uni_hive_dir,
-    sql_dir = sql_dir,
-    output_path = multi_output_dir,
-    person_ids = persons,
-    batch_size = 6,
-    batch_column = "batch",
-    data_type_col = "data_type"
+  testthat::expect_warning(
+    multivariate_episodes_pipeline(
+      study_variables = sv_meta,
+      con = con,
+      d3_univariate_episodes_path = uni_hive_dir,
+      sql_dir = sql_dir,
+      output_path = multi_output_dir,
+      person_ids = persons,
+      batch_size = 6,
+      batch_column = "batch",
+      data_type_col = "data_type"
+    ),
+    "will be deprecated"
   )
 
   read_glob <- if (dir.exists(multi_output_dir)) {
