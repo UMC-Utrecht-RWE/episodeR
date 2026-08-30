@@ -89,7 +89,7 @@ create_multivariate_episodes <- function(
     d3_univariate_episodes_path
   )
 
-  sql_build_episodes <- read_sql("create_multivariate_episodes.sql")
+  sql_build_episodes <- read_sql("create_multivariate_episodes_2_combine_and_pivot.sql")
 
   # Batching is a safety net for cohorts too large to fit in memory in one
   # pass -- not the default path. It only activates when a
@@ -128,7 +128,7 @@ create_multivariate_episodes <- function(
   }
 
   sql_initial <- glue::glue(
-    read_sql("multi_initial.sql"),
+    read_sql("create_multivariate_episodes_1_encode_variables.sql"),
     d3_univariate_episodes_path = uni_epi_param
   )
 
