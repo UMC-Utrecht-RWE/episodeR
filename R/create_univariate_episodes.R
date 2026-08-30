@@ -66,14 +66,13 @@ create_univariate_episodes <- function(
   if (missing(output_hive_path) || !nzchar(output_hive_path)) {
     stop("output_hive_path must be provided and non-empty.")
   }
-  dir.create(output_hive_path, recursive = TRUE, showWarnings = FALSE)
+  validate_connection(con)
+  validate_data_frame(study_variables, "study_variables")
+  validate_batch_size(batch_size)
+  validate_required_columns(study_variables, c("concept_id", "variable_id"))
+  use_batch <- validate_batch_column(study_variables, batch_column)
 
-  if (!(batch_column %in% names(study_variables))) {
-    stop(sprintf(
-      "study_variables must include a Boolean '%s' column to control batching per variable.",
-      batch_column
-    ))
-  }
+  dir.create(output_hive_path, recursive = TRUE, showWarnings = FALSE)
 
   # Resolve missing_set_to column.
   # If missing_col is NULL, fill with NA (becomes NULL in DuckDB).
@@ -106,23 +105,6 @@ create_univariate_episodes <- function(
       )
     )
   }
-  batch_values <- study_variables[[batch_column]]
-  if (is.logical(batch_values)) {
-    use_batch <- batch_values
-  } else {
-    normalized <- tolower(trimws(as.character(batch_values)))
-    use_batch <- normalized %in% c("true", "t", "1", "yes", "y")
-    invalid_batch_values <- !(normalized %in%
-      c("true", "t", "1", "yes", "y", "false", "f", "0", "no", "n", "", "na"))
-    if (any(invalid_batch_values, na.rm = TRUE)) {
-      stop(sprintf(
-        "Column '%s' must contain only Boolean-like values (TRUE/FALSE, 1/0, yes/no).",
-        batch_column
-      ))
-    }
-  }
-  use_batch[is.na(use_batch)] <- FALSE
-
   sv_non_batch <- study_variables[!use_batch, , drop = FALSE]
   sv_batch <- study_variables[use_batch, , drop = FALSE]
 

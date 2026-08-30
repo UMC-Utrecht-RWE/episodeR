@@ -57,23 +57,17 @@ create_multivariate_episodes <- function(
   if (missing(output_path) || !nzchar(output_path)) {
     stop("output_path must be provided and non-empty.")
   }
+  validate_connection(con)
+  validate_data_frame(study_variables, "study_variables")
+  validate_batch_size(batch_size)
+  validate_required_columns(study_variables, "variable_id")
+  use_batch <- validate_batch_column(study_variables, batch_column)
 
   if (dir.exists(output_path)) {
     unlink(output_path, recursive = TRUE, force = TRUE)
   }
 
   dir.create(output_path, recursive = TRUE, showWarnings = FALSE)
-
-  if (!(batch_column %in% names(study_variables))) {
-    stop(sprintf(
-      "study_variables must include a Boolean '%s' column to control batching per variable.",
-      batch_column
-    ))
-  }
-
-  if (!("variable_id" %in% names(study_variables))) {
-    stop("study_variables must include a 'variable_id' column.")
-  }
 
   target_variable_ids <- unique(study_variables$variable_id)
   target_variable_ids <- target_variable_ids[!is.na(target_variable_ids)]
@@ -102,22 +96,6 @@ create_multivariate_episodes <- function(
   # study_variables[[batch_column]] flag is TRUE or the cohort exceeds
   # batch_size persons; otherwise the whole cohort runs through the single
   # fast SQL pass below, unchanged from before batching support existed.
-  batch_values <- study_variables[[batch_column]]
-  if (is.logical(batch_values)) {
-    use_batch <- batch_values
-  } else {
-    normalized <- tolower(trimws(as.character(batch_values)))
-    use_batch <- normalized %in% c("true", "t", "1", "yes", "y")
-    invalid_batch_values <- !(normalized %in%
-      c("true", "t", "1", "yes", "y", "false", "f", "0", "no", "n", "", "na"))
-    if (any(invalid_batch_values, na.rm = TRUE)) {
-      stop(sprintf(
-        "Column '%s' must contain only Boolean-like values (TRUE/FALSE, 1/0, yes/no).",
-        batch_column
-      ))
-    }
-  }
-  use_batch[is.na(use_batch)] <- FALSE
   do_batch <- any(use_batch)
 
   if (is.null(person_ids)) {

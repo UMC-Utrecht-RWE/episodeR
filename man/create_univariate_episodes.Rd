@@ -69,10 +69,7 @@ D3_UNIVARIATE_EPISODES in the provided DuckDB connection, using a
 window-function ("gaps and islands") interval merge instead of the
 self-join + NOT EXISTS merge \code{\link[=univariate_episodes_pipeline]{univariate_episodes_pipeline()}} uses, and
 filtering concept_dedup down to the concept_ids actually in use before
-deduplicating rather than after. Runs 4 SQL steps rather than 5: the
-clip-to-study-period step is dropped as a no-op here, since step 1's
-trimming already guarantees every row stays within
-[start_study_date, end_study_date] by construction.
+deduplicating rather than after.
 }
 \section{Batching}{
 
