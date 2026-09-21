@@ -1,25 +1,25 @@
-## Large-scale black-box test: univariate_episodes_pipeline() +
-## multivariate_episodes_pipeline() end-to-end, across a cohort/variable
-## count an order of magnitude past the existing hand-verified fixtures
-## (which top out around 10 persons / 10 variables). Purpose is to catch
-## integration-level breakage that only shows up at width/scale -- schema
-## drift, batching correctness, look-back/MRR cropping, gap-fill defaults --
-## that small fixtures wouldn't exercise.
-##
-## At this scale a hand-computed expected table isn't practical, so this
-## test uses two complementary strategies instead of one exact oracle:
-##   1. Structural sanity checks on the univariate output (full, gap-free,
-##      non-overlapping coverage of the study period for every person x
-##      variable pair; correct person/variable universe; dates within
-##      bounds). Detailed correctness of the univariate transform itself
-##      (dedup, MRR cropping, chain-merge, gap-fill) is already covered by
-##      the small hand-verified fixtures in test-univariate-pipeline-blackbox.R
-##      and the per-step test-univariate-step*.R files.
-##   2. reference_combine() (helper-blackbox.R) as an independent oracle for
-##      the multivariate combination step, applied to the pipeline's own
-##      real univariate output -- same "round-trip" pattern already used by
-##      the smaller "round-trips correctly on real univariate_episodes_pipeline()
-##      output" test in test-multivariate-pipeline-blackbox.R, just scaled up.
+# Large-scale black-box test: univariate_episodes_pipeline() +
+# multivariate_episodes_pipeline() end-to-end, across a cohort/variable
+# count an order of magnitude past the existing hand-verified fixtures
+# (which top out around 10 persons / 10 variables). Purpose is to catch
+# integration-level breakage that only shows up at width/scale -- schema
+# drift, batching correctness, look-back/MRR cropping, gap-fill defaults --
+# that small fixtures wouldn't exercise.
+#
+# At this scale a hand-computed expected table isn't practical, so this
+# test uses two complementary strategies instead of one exact oracle:
+#   1. Structural sanity checks on the univariate output (full, gap-free,
+#      non-overlapping coverage of the study period for every person x
+#      variable pair; correct person/variable universe; dates within
+#      bounds). Detailed correctness of the univariate transform itself
+#      (dedup, MRR cropping, chain-merge, gap-fill) is already covered by
+#      the small hand-verified fixtures in test-univariate-pipeline-blackbox.R
+#      and the per-step test-univariate-step*.R files.
+#   2. reference_combine() (helper-blackbox.R) as an independent oracle for
+#      the multivariate combination step, applied to the pipeline's own
+#      real univariate output -- same "round-trip" pattern already used by
+#      the smaller "round-trips correctly on real univariate_episodes_pipeline()
+#      output" test in test-multivariate-pipeline-blackbox.R, just scaled up.
 
 testthat::test_that("univariate_episodes_pipeline + multivariate_episodes_pipeline end-to-end across 20 persons / 30 variables", {
   set.seed(20240101)

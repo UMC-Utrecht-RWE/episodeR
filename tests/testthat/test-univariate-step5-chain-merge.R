@@ -1,6 +1,6 @@
-## Tests for uni_epi_5_chain_merge_episodes.sql
-## Input: episodes_complete
-## Output: D3_UNIVARIATE_EPISODES
+# Tests for uni_epi_5_chain_merge_episodes.sql
+# Input: episodes_complete
+# Output: D3_UNIVARIATE_EPISODES
 
 seed_ec <- function(con, df) {
   DBI::dbWriteTable(con, "episodes_complete", df, overwrite = TRUE)
@@ -164,7 +164,8 @@ test_that("10 persons exercise contiguous/overlapping merge, no-merge, NULL-equa
     "SELECT * FROM D3_UNIVARIATE_EPISODES ORDER BY person_id, variable_id, start_episode"
   ))
 
-  expect_equal(nrow(out), 15) # 1+1+2+2+1+1+3+2+1+1 across P1..P10
+  # 1+1+2+2+1+1+3+2+1+1 rows for P1..P10
+  expect_equal(nrow(out), 15)
   expect_setequal(unique(out$person_id), paste0("P", 1:10))
 
   p1 <- out[person_id == "P1"]

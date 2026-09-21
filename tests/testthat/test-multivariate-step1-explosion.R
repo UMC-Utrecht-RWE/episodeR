@@ -1,16 +1,16 @@
-## Tests for multi_epi_1_explosion.sql
-##
-## Produces: dim_var, new_variables_ids, EXPLODED
-##
-## Unlike the uni_epi_*.sql steps, this step reads a real hive-partitioned
-## parquet dataset (the {d3_univariate_episodes_path} param is a whole
-## "'<dir>/**/*.parquet', hive_partitioning = TRUE" fragment, substituted
-## verbatim into `read_parquet(...)`), so these tests write small on-disk
-## parquet fixtures via write_uni_epi_fixture() rather than seeding a table
-## directly. dim_date, i_batch_persons, and list_sv are also required
-## inputs and are seeded per test, mirroring how
-## multivariate_episodes_pipeline() builds them (see
-## R/multivariate_episodes_pipeline.R).
+# Tests for multi_epi_1_explosion.sql
+#
+# Produces: dim_var, new_variables_ids, EXPLODED
+#
+# Unlike the uni_epi_*.sql steps, this step reads a real hive-partitioned
+# parquet dataset (the {d3_univariate_episodes_path} param is a whole
+# "'<dir>/**/*.parquet', hive_partitioning = TRUE" fragment, substituted
+# verbatim into `read_parquet(...)`), so these tests write small on-disk
+# parquet fixtures via write_uni_epi_fixture() rather than seeding a table
+# directly. dim_date, i_batch_persons, and list_sv are also required
+# inputs and are seeded per test, mirroring how
+# multivariate_episodes_pipeline() builds them (see
+# R/multivariate_episodes_pipeline.R).
 
 uni_epi_row <- function(
   person_id,
@@ -198,19 +198,29 @@ test_that("different persons explode independently and never mix rows", {
 test_that("10 persons exercise batch/study-variable filtering, dictionary reuse, and concurrent/sequential overlap together", {
   con <- new_test_con()
   episodes <- rbind(
-    uni_epi_row("P1", "VAR1", "A", "2024-01-05", "2024-01-05"), # single day
-    uni_epi_row("P2", "VAR1", "A", "2024-01-01", "2024-01-05"), # 5-day run
-    uni_epi_row("P3", "VAR1", "A", "2024-01-01", "2024-01-05"), # concurrent overlap
+    # P1: single day.
+    uni_epi_row("P1", "VAR1", "A", "2024-01-05", "2024-01-05"),
+    # P2: 5-day run.
+    uni_epi_row("P2", "VAR1", "A", "2024-01-01", "2024-01-05"),
+    # P3: two variables concurrently active (overlapping days).
+    uni_epi_row("P3", "VAR1", "A", "2024-01-01", "2024-01-05"),
     uni_epi_row("P3", "VAR2", "B", "2024-01-03", "2024-01-07"),
-    uni_epi_row("P4", "VAR1", "A", "2024-01-01", "2024-01-03"), # sequential, no overlap
+    # P4: two variables active sequentially, no overlap.
+    uni_epi_row("P4", "VAR1", "A", "2024-01-01", "2024-01-03"),
     uni_epi_row("P4", "VAR2", "B", "2024-01-05", "2024-01-07"),
-    uni_epi_row("P5", "VAR1", NA_character_, "2024-01-01", "2024-01-03"), # NULL value
-    uni_epi_row("P6", "VAR1", "A", "2024-01-01", "2024-01-03"), # excluded via batch filter
-    uni_epi_row("P7", "VAR3", "A", "2024-01-01", "2024-01-03"), # excluded via study-variable filter
-    uni_epi_row("P8", "VAR1", "A", "2024-01-10", "2024-01-10"), # dictionary reuse with P1
-    uni_epi_row("P9", "VAR1", "A", "2024-01-01", "2024-01-10"), # variable joins partway through
+    # P5: NULL value.
+    uni_epi_row("P5", "VAR1", NA_character_, "2024-01-01", "2024-01-03"),
+    # P6: excluded via the batch filter (kept out of `persons` below).
+    uni_epi_row("P6", "VAR1", "A", "2024-01-01", "2024-01-03"),
+    # P7: excluded via the study-variable filter (VAR3 kept out of `variables` below).
+    uni_epi_row("P7", "VAR3", "A", "2024-01-01", "2024-01-03"),
+    # P8: same (variable_id, value) as P1, for dictionary reuse.
+    uni_epi_row("P8", "VAR1", "A", "2024-01-10", "2024-01-10"),
+    # P9: a second variable joins partway through the first's episode.
+    uni_epi_row("P9", "VAR1", "A", "2024-01-01", "2024-01-10"),
     uni_epi_row("P9", "VAR2", "B", "2024-01-05", "2024-01-08"),
-    uni_epi_row("P10", "VAR1", "A", "2024-01-01", "2024-01-10") # long 10-day episode
+    # P10: long 10-day episode.
+    uni_epi_row("P10", "VAR1", "A", "2024-01-01", "2024-01-10")
   )
   # P6 is deliberately left out of the batch; P7's only variable (VAR3) is
   # deliberately left out of list_sv - both should end up with zero rows
@@ -225,7 +235,8 @@ test_that("10 persons exercise batch/study-variable filtering, dictionary reuse,
   out <- data.table::as.data.table(DBI::dbGetQuery(con, "SELECT * FROM EXPLODED"))
   dim_var <- data.table::as.data.table(DBI::dbGetQuery(con, "SELECT * FROM dim_var"))
 
-  expect_equal(nrow(out), 50) # 1+5+10+6+3+0+0+1+14+10 across P1..P10
+  # 1+5+10+6+3+0+0+1+14+10 rows for P1..P10
+  expect_equal(nrow(out), 50)
   expect_setequal(
     unique(out$person_id),
     c("P1", "P2", "P3", "P4", "P5", "P8", "P9", "P10")

@@ -1,15 +1,15 @@
-## Tests for multi_epi_2_combine.sql
-## Input: EXPLODED (person_id, int_var_id, dates) - one row per person per
-##   active variable per day, as produced by multi_epi_1_explosion.sql.
-## Output: multivariate_episode (person_id, combination, start_episode,
-##   end_episode), where `combination` is a ';'-joined string of the
-##   int_var_id's active that day, and consecutive days with an identical
-##   combination are chain-merged into one episode.
-##
-## seed_exploded() rows must list each (person_id, dates) group's variables
-## in ascending int_var_id order - see the comment on seed_exploded() in
-## helper-multivariate.R for why (string_agg has no explicit ORDER BY, and
-## relies on EXPLODED already being sorted that way).
+# Tests for multi_epi_2_combine.sql
+# Input: EXPLODED (person_id, int_var_id, dates) - one row per person per
+#   active variable per day, as produced by multi_epi_1_explosion.sql.
+# Output: multivariate_episode (person_id, combination, start_episode,
+#   end_episode), where `combination` is a ';'-joined string of the
+#   int_var_id's active that day, and consecutive days with an identical
+#   combination are chain-merged into one episode.
+#
+# seed_exploded() rows must list each (person_id, dates) group's variables
+# in ascending int_var_id order - see the comment on seed_exploded() in
+# helper-multivariate.R for why (string_agg has no explicit ORDER BY, and
+# relies on EXPLODED already being sorted that way).
 
 test_that("a single active variable produces one episode spanning its full date range", {
   con <- new_test_con()
@@ -95,9 +95,11 @@ test_that("a value change that keeps the same variable set still produces one st
 test_that("a real value change (different int_var_id) splits into two episodes with no merge", {
   con <- new_test_con()
   seed_exploded(con, list(
-    c("p1", 1L, "2024-01-01"), # VAR1=A
+    # VAR1 = A on int_var_id 1
+    c("p1", 1L, "2024-01-01"),
     c("p1", 1L, "2024-01-02"),
-    c("p1", 2L, "2024-01-03"), # VAR1=B (different dictionary entry)
+    # VAR1 = B on int_var_id 2 (a different dictionary entry)
+    c("p1", 2L, "2024-01-03"),
     c("p1", 2L, "2024-01-04")
   ))
   out <- run_combine_sql(con)
@@ -162,9 +164,18 @@ test_that("KNOWN BEHAVIOUR: a genuine coverage gap (no EXPLODED row at all) with
 test_that("10 persons exercise joining/dropping variables, real value changes, long chains, and multi-segment splits together", {
   con <- new_test_con()
 
-  # Build EXPLODED rows for `person` on each day in `day_range` (1-based,
-  # within 2024-01) with all of `var_ids` active that day, in ascending
-  # order (see seed_exploded()'s ordering requirement).
+  #' Build EXPLODED rows for one person
+  #'
+  #' Returns one row per day in `day_range`, with all of `var_ids` active
+  #' that day. `var_ids` is sorted before use because seed_exploded()
+  #' requires each (person, date) group listed in ascending int_var_id
+  #' order (see its own docs for why).
+  #'
+  #' @param person Person id.
+  #' @param day_range Integer vector of days in 2024-01 to generate rows for.
+  #' @param var_ids Integer vector of int_var_id values active on those days.
+  #'
+  #' @return A list of c(person_id, int_var_id, date) rows.
   day_rows <- function(person, day_range, var_ids) {
     unlist(lapply(day_range, function(d) {
       lapply(sort(var_ids), function(v) c(person, v, sprintf("2024-01-%02d", d)))
@@ -172,21 +183,32 @@ test_that("10 persons exercise joining/dropping variables, real value changes, l
   }
 
   rows <- c(
-    day_rows("p1", 1:5, 1), # single variable throughout
-    day_rows("p2", 1:5, c(1, 2)), # two variables combined throughout
-    day_rows("p3", 1:3, c(1, 2)), day_rows("p3", 4:6, 1), # variable drops out
-    day_rows("p4", 1:3, 1), day_rows("p4", 4:6, c(1, 2)), # variable joins
-    day_rows("p5", 1:3, 1), day_rows("p5", 4:6, 3), # real value change (1 -> 3)
-    day_rows("p6", 1:9, 1), # long 9-day chain, one combination
-    day_rows("p7", 1:3, 1), day_rows("p7", 4:6, 2), day_rows("p7", 7:9, 1), # A-B-A
-    day_rows("p8", 1:5, 4), # mirrors p1's shape, independence sanity check
-    day_rows("p9", 1, 1), # single day only
-    day_rows("p10", 1:2, 1), day_rows("p10", 3:5, c(1, 2)), day_rows("p10", 6:7, 2) # 3-segment ramp up/down
+    # p1: single variable throughout.
+    day_rows("p1", 1:5, 1),
+    # p2: two variables combined throughout.
+    day_rows("p2", 1:5, c(1, 2)),
+    # p3: a variable drops out partway through.
+    day_rows("p3", 1:3, c(1, 2)), day_rows("p3", 4:6, 1),
+    # p4: a variable joins partway through.
+    day_rows("p4", 1:3, 1), day_rows("p4", 4:6, c(1, 2)),
+    # p5: a real value change (int_var_id 1 -> 3).
+    day_rows("p5", 1:3, 1), day_rows("p5", 4:6, 3),
+    # p6: long 9-day chain, one combination throughout.
+    day_rows("p6", 1:9, 1),
+    # p7: A-B-A - a combination recurring after an interruption.
+    day_rows("p7", 1:3, 1), day_rows("p7", 4:6, 2), day_rows("p7", 7:9, 1),
+    # p8: mirrors p1's shape, independence sanity check.
+    day_rows("p8", 1:5, 4),
+    # p9: single day only.
+    day_rows("p9", 1, 1),
+    # p10: 3-segment ramp up then down.
+    day_rows("p10", 1:2, 1), day_rows("p10", 3:5, c(1, 2)), day_rows("p10", 6:7, 2)
   )
   seed_exploded(con, rows)
   out <- run_combine_sql(con)
 
-  expect_equal(nrow(out), 17) # 1+1+2+2+2+1+3+1+1+3 across p1..p10
+  # 1+1+2+2+2+1+3+1+1+3 rows for p1..p10
+  expect_equal(nrow(out), 17)
   expect_setequal(unique(out$person_id), paste0("p", 1:10))
 
   p1 <- out[out$person_id == "p1", ]

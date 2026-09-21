@@ -1,6 +1,6 @@
-## Tests for uni_epi_2_fill_gap_spells.sql
-## Input: episodes_raw, study_variables (missing_set_to)
-## Output: episodes_with_gaps
+# Tests for uni_epi_2_fill_gap_spells.sql
+# Input: episodes_raw, study_variables (missing_set_to)
+# Output: episodes_with_gaps
 
 seed_episodes_raw <- function(con, episodes_raw, missing_set_to = "MISSING") {
   DBI::dbWriteTable(con, "episodes_raw", episodes_raw, overwrite = TRUE)
@@ -157,7 +157,8 @@ test_that("10 persons exercise before/between/after gap-filling, no-gap coverage
     "SELECT * FROM episodes_with_gaps ORDER BY person_id, start_episode"
   ))
 
-  expect_equal(nrow(out), 27) # 3+2+2+1+2+5+3+3+3+3 across P1..P10
+  # 3+2+2+1+2+5+3+3+3+3 rows for P1..P10
+  expect_equal(nrow(out), 27)
   expect_setequal(unique(out$person_id), paste0("P", 1:10))
 
   expect_equal(nrow(out[person_id == "P1"]), 3)

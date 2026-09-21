@@ -11,9 +11,9 @@
 # tests/testthat/helper-univariate.R seeds each uni_epi_*.sql step in
 # isolation rather than always running the full pipeline.
 #
-# run_step()/.load_sql()/new_test_con() come from helper-univariate.R
-# (auto-loaded first by testthat, alphabetically before this file) - they
-# are generic over which SQL file/params they run, so are reused as-is here.
+# run_step()/.load_sql()/new_test_con() come from helper-univariate.R, which is
+# sourced by testthat along with the other helper files. They are generic over
+# which SQL file/params they run, so are reused as-is here.
 
 #' Write a small hive-partitioned parquet fixture mimicking
 #' D3_UNIVARIATE_EPISODES, and return the "'<dir>/**/*.parquet',

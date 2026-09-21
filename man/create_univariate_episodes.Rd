@@ -35,7 +35,7 @@ table/view. If different from D3_CONCEPTS, it is aliased as D3_CONCEPTS.}
 \item{end_date_missing_inclusion}{Study period end date.}
 
 \item{output_hive_path}{Directory path where parquet hive output
-partitions will be written after each full 5-step pipeline execution.}
+partitions will be written after each full 4-step pipeline execution.}
 
 \item{batch_size}{Maximum number of persons per batch. Cohorts larger than
 this are split into batches, even for variables not flagged via

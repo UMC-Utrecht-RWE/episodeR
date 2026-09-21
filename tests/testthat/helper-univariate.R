@@ -1,17 +1,17 @@
-## Test helpers for the univariate episode pipeline.
-##
-## These helpers deliberately do NOT depend on the internal `picard`
-## package (picard::load_sql_query / picard::execute_sql_file), so this
-## suite can run in CI or any environment that only has DBI + duckdb +
-## data.table available. `.load_sql()` re-implements picard's simple
-## "{param}" substitution; `.exec_sql_file()` mirrors execute_sql_file()
-## by running every semicolon-separated statement in a file in order.
-##
-## If your environment *does* have `picard` installed and you want the
-## tests to exercise the exact production code path (including
-## `univariate_episodes_pipeline()` itself), see
-## test-univariate-integration.R, which is skipped automatically when
-## `picard` is not available.
+# Test helpers for the univariate episode pipeline.
+#
+# These helpers deliberately do NOT depend on the internal `picard`
+# package (picard::load_sql_query / picard::execute_sql_file), so this
+# suite can run in CI or any environment that only has DBI + duckdb +
+# data.table available. `.load_sql()` re-implements picard's simple
+# "{param}" substitution; `.exec_sql_file()` mirrors execute_sql_file()
+# by running every semicolon-separated statement in a file in order.
+#
+# If your environment *does* have `picard` installed and you want the
+# tests to exercise the exact production code path (including
+# `univariate_episodes_pipeline()` itself), see
+# test-univariate-integration.R, which is skipped automatically when
+# `picard` is not available.
 
 sql_dir <- system.file("sql", package = "episodeR")
 if (!nzchar(sql_dir)) {

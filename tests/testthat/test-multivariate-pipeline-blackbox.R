@@ -1,13 +1,13 @@
-## Black-box test for multivariate_episodes_pipeline().
-##
-## Unlike test_multivariate_episodes_pipeline.R and the
-## test-multivariate-step*.R files, this test never touches multi_epi_*.sql
-## or any intermediate SQL table (EXPLODED, dim_var, multivariate_episode,
-## ...) - it only calls the public multivariate_episodes_pipeline()
-## function and asserts on its final parquet output. It's meant to survive
-## a rewrite of the SQL implementation, as long as the function's
-## documented input/output contract holds; the SQL-specific test files are
-## expected to be deleted once that rewrite lands.
+# Black-box test for multivariate_episodes_pipeline().
+#
+# Unlike test_multivariate_episodes_pipeline.R and the
+# test-multivariate-step*.R files, this test never touches multi_epi_*.sql
+# or any intermediate SQL table (EXPLODED, dim_var, multivariate_episode,
+# ...) - it only calls the public multivariate_episodes_pipeline()
+# function and asserts on its final parquet output. It's meant to survive
+# a rewrite of the SQL implementation, as long as the function's
+# documented input/output contract holds; the SQL-specific test files are
+# expected to be deleted once that rewrite lands.
 
 testthat::test_that("multivariate_episodes_pipeline produces correct output across 10 persons/2 variables", {
   # The univariate input is constructed directly (not produced by running
@@ -557,6 +557,7 @@ testthat::test_that("multivariate_episodes_pipeline combines 10 simultaneous var
   data.table::setcolorder(actual, names(expected))
 
   testthat::expect_equal(nrow(actual), 18)
-  testthat::expect_equal(nrow(actual[actual$person_id == "P3", ]), 11) # the fragmentation case
+  # P3 is the maximally-staggered fragmentation case.
+  testthat::expect_equal(nrow(actual[actual$person_id == "P3", ]), 11)
   testthat::expect_equal(actual, expected)
 })

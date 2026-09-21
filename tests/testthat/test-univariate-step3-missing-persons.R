@@ -1,6 +1,6 @@
-## Tests for uni_epi_3_add_missing_persons.sql
-## Input: episodes_with_gaps, all_persons, list_sv, study_variables
-## Output: episodes_complete
+# Tests for uni_epi_3_add_missing_persons.sql
+# Input: episodes_with_gaps, all_persons, list_sv, study_variables
+# Output: episodes_complete
 
 params <- list(start_study_date = "'2024-01-01'", end_study_date = "'2024-01-31'")
 

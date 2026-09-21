@@ -1,16 +1,16 @@
-## Tests for multi_epi_3_mergestatus.sql
-## Input: multivariate_episode_coded (person_id, dic_index, start_episode,
-##   end_episode) - the dictionary-encoded combination episodes produced by
-##   the R-side pivot/encode step between multi_epi_2 and multi_epi_3 (see
-##   R/multivariate_episodes_pipeline.R's run_batch()).
-## Output: same columns, with contiguous/overlapping same-dic_index
-##   intervals chain-merged - the same algorithm as
-##   uni_epi_5_chain_merge_episodes.sql, keyed on dic_index instead of value
-##   and using INTERVAL '1 day' arithmetic instead of integer +/-1 (dates
-##   here are already DATE-typed, unlike the univariate step's VARCHAR
-##   pass-through columns).
-##
-## seed_episode_coded()/run_mergestatus_sql() come from helper-multivariate.R.
+# Tests for multi_epi_3_mergestatus.sql
+# Input: multivariate_episode_coded (person_id, dic_index, start_episode,
+#   end_episode) - the dictionary-encoded combination episodes produced by
+#   the R-side pivot/encode step between multi_epi_2 and multi_epi_3 (see
+#   R/multivariate_episodes_pipeline.R's run_batch()).
+# Output: same columns, with contiguous/overlapping same-dic_index
+#   intervals chain-merged - the same algorithm as
+#   uni_epi_5_chain_merge_episodes.sql, keyed on dic_index instead of value
+#   and using INTERVAL '1 day' arithmetic instead of integer +/-1 (dates
+#   here are already DATE-typed, unlike the univariate step's VARCHAR
+#   pass-through columns).
+#
+# seed_episode_coded()/run_mergestatus_sql() come from helper-multivariate.R.
 
 test_that("contiguous (adjacent, no gap) same-dic_index episodes merge into one", {
   con <- new_test_con()
@@ -107,6 +107,8 @@ test_that("a recurring identical dic_index separated by a different one in betwe
 })
 
 test_that("10 persons with many dic_index values all merge/split correctly in one pass", {
+  # What each person (P1..P10) tests is explained where it's checked,
+  # below the SQL call - one comment per person, next to its assertions.
   con <- new_test_con()
   seed_episode_coded(con, data.frame(
     person_id = c(
@@ -127,11 +129,11 @@ test_that("10 persons with many dic_index values all merge/split correctly in on
       "2024-01-01",
       "2024-01-01", "2024-01-15",
       "2024-01-01", "2024-01-02",
-      "2024-01-01", "2024-01-10", # P6: overlapping -> merge to union
-      "2024-01-01", "2024-01-12", # P7: genuine 1-day gap -> stays 2
-      "2024-01-12", "2024-01-01", "2024-01-20", # P8: 3+ chain, out of order -> merge to 1
-      "2024-02-01", # P9: single episode, independence sanity check
-      "2024-01-01", "2024-01-06", "2024-01-15" # P10: merge dic=10, dic=11 stays separate
+      "2024-01-01", "2024-01-10",
+      "2024-01-01", "2024-01-12",
+      "2024-01-12", "2024-01-01", "2024-01-20",
+      "2024-02-01",
+      "2024-01-01", "2024-01-06", "2024-01-15"
     )),
     end_episode = as.Date(c(
       "2024-01-05", "2024-01-10", "2024-01-20",

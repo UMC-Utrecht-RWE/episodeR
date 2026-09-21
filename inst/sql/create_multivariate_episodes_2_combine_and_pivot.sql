@@ -11,7 +11,8 @@ events_agg AS (
     FROM events
     GROUP BY person_id, int_var_id, event_date
 ),
--- running on/off state for each variable, evaluated only at ITS OWN event dates
+-- sparse: a row exists only at this variable's own event dates. Gaps at
+-- other variables' breakpoints are filled later (see carried).
 own_running AS (
     SELECT person_id, int_var_id, event_date,
         SUM(delta) OVER (
@@ -22,7 +23,9 @@ own_running AS (
 ),
 person_breakpoints AS (SELECT DISTINCT person_id, event_date FROM events_agg),
 person_vars        AS (SELECT DISTINCT person_id, int_var_id FROM events_agg),
--- align every variable onto every breakpoint for that person
+-- cross-joins every variable onto every person's breakpoints (not just its
+-- own), so a combination change triggered by one variable is visible to
+-- all the others at that date too
 aligned AS (
     SELECT pb.person_id, pb.event_date, pv.int_var_id, orun.active
     FROM person_breakpoints pb
@@ -32,7 +35,9 @@ aligned AS (
        AND orun.int_var_id = pv.int_var_id
        AND orun.event_date = pb.event_date
 ),
--- forward-fill each variable's last known state across breakpoints where it had no event
+-- closes the gaps left by the cross join above: active is NULL at any
+-- breakpoint that isn't this variable's own event, so carry the last
+-- known value forward (0 before its first event)
 carried AS (
     SELECT person_id, event_date, int_var_id,
         COALESCE(
@@ -43,12 +48,6 @@ carried AS (
         ) AS active
     FROM aligned
 ),
--- combos AS (
---     SELECT person_id, event_date,
---         list_sort(list(int_var_id) FILTER (active = 1)) AS combination
---     FROM carried
---     GROUP BY person_id, event_date
--- ),
 combos AS (
     SELECT person_id, event_date,
         list_sort(list(int_var_id) FILTER (active > 0)) AS combination
@@ -75,6 +74,9 @@ person_bounds AS (
     SELECT person_id, MAX(end_episode) AS max_real_day
     FROM new_variables_ids GROUP BY person_id
 )
+-- COALESCE covers the last episode, where next_date is NULL because there's
+-- no following breakpoint; LEAST then clamps to max_real_day so an episode
+-- never ends past the person's last real observation
 SELECT g.person_id, g.combination,
        MIN(g.start_episode) AS start_episode,
        LEAST(COALESCE(MAX(g.next_date), pb.max_real_day + 1) - 1, pb.max_real_day) AS end_episode
@@ -82,47 +84,16 @@ FROM grouped g
 JOIN person_bounds pb ON g.person_id = pb.person_id
 GROUP BY g.person_id, g.combination, g.grp, pb.max_real_day;
 
-CREATE OR REPLACE TABLE dim_combination AS
-SELECT 
-    combination,
-    ROW_NUMBER() OVER (ORDER BY combination) AS dic_index
-FROM (
-    SELECT DISTINCT combination 
-    FROM multivariate_episode
-);
-
-
---NEW 14
--- Step 2b: Pivot multivariate_episode (list-of-int_var_id combination
--- column) into the wide person x episode x variable_id format that the
--- original pipeline produced via R's dcast(). This replaces the R-side
--- unnest + join + dcast block in multivariate_episodes_pipeline.R.
+-- PIVOT's column set is discovered from the data at run time: one column
+-- per distinct variable_id that's actually active in some combination, not
+-- every variable_id in dim_var. A variable never active for anyone
+-- correctly gets no column at all.
 --
--- Pure SQL, single execute_sql_file() call -- no host-language column
--- discovery step needed between the two statements. The PIVOT learns its
--- column set (one per distinct variable_id actually present in some
--- combination -- not every variable_id in dim_var; a variable that's never
--- active anywhere correctly gets no column) at the moment it runs, and the
--- second statement's CASE ... COLUMNS(*) ... END transform expression
--- expands DuckDB-side to one CASE per matched column, so it adapts to
--- whatever columns the PIVOT produced without needing to know their names
--- in advance.
---
--- Semantics preserved from the original dcast(value.var="value", fill=FALSE):
---   - variable NOT in the episode's combination at all  -> 'FALSE' (string)
---   - variable IS in the combination, but its value happens to be NULL
---     (e.g. a univariate gap-fill code)                  -> NULL (real NA)
--- These two cases must not collapse into the same thing, which is why the
--- struct sentinel {'present': true, 'val': ...} is used as the pivot's
--- aggregated value instead of pivoting on value directly: PIVOT's
--- first(value) alone can't distinguish "no row" from "row with NULL value".
-
--- DROP TABLE IF EXISTS multivariate_episode_wide_raw;
--- DROP TABLE IF EXISTS multivariate_episode_wide;
-
--- Statement 1: unnest each episode's combination, join to dim_var to
--- recover variable_id/value, then pivot into one struct column per
--- distinct variable_id seen in any combination.
+-- The pivoted cell is a {'present', 'val'} struct rather than the raw
+-- value, because first(value) alone can't tell "variable absent from the
+-- combination" apart from "variable present with a NULL value" -- both
+-- would just be NULL. The struct's 'present' flag keeps those cases
+-- distinguishable for the unwrap step below.
 CREATE OR REPLACE TABLE multivariate_episode_wide_raw AS (
     WITH unpacked AS (
         SELECT
@@ -139,11 +110,11 @@ CREATE OR REPLACE TABLE multivariate_episode_wide_raw AS (
     GROUP BY person_id, start_episode, end_episode
 );
 
--- Statement 2: unwrap each per-variable struct column into the final
--- value -- 'FALSE' where the struct itself is NULL (variable absent from
--- the combination), otherwise the variable's actual value (which may
--- itself be NULL). COLUMNS(*) applies this CASE expression to every
--- non-key column dynamically, whatever those columns turned out to be.
+-- A NULL struct means the variable was absent from the combination, which
+-- must render as the string 'FALSE' -- not the same as a present variable
+-- whose actual value is NULL, which must stay NULL. COLUMNS(*) is used
+-- instead of naming columns because the pivot's column set isn't known
+-- until it runs; DuckDB expands this CASE once per matched column.
 CREATE OR REPLACE TABLE multivariate_episode_wide AS (
     SELECT
         person_id,
