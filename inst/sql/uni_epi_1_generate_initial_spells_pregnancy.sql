@@ -65,7 +65,12 @@ WITH
             JOIN study_variables sv ON c.concept_id = sv.concept_id
             JOIN pregnancy_episode_windows pw ON pw.person_id = c.person_id
             AND COALESCE(UPPER(TRIM(CAST(pw.value AS VARCHAR))), '') IN ('TRUE', 'T', '1', 'YES', 'Y')
-            AND c.date BETWEEN pw.lmp_date AND pw.pregnancy_end_date
+            AND c.date BETWEEN pw.lmp_date - CAST(sv.start_look_back AS INTEGER) AND (
+                CASE
+                    WHEN UPPER(TRIM(CAST(sv.anchor_date_end AS VARCHAR))) = 'LMP_DATE' THEN pw.lmp_date
+                    ELSE pw.pregnancy_end_date
+                END
+            ) + CAST(sv.end_look_back AS INTEGER)
         WHERE
             c.concept_id IN ({concept_id_list})
             AND COALESCE(
