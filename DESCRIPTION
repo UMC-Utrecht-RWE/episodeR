@@ -8,8 +8,9 @@ License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Imports: 
-    DBI, 
-    data.table
+    DBI,
+    data.table,
+    glue
 Suggests: 
     logger,
     picard,
