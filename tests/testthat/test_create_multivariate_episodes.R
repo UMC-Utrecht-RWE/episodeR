@@ -100,7 +100,7 @@ testthat::test_that("Multivariate episodes pipeline produces expected output", {
   testthat::expect_equal(actual, expected)
 })
 
-testthat::test_that("multivariate_episodes_pipeline errors when batch column is missing", {
+testthat::test_that("create_multivariate_episodes errors when batch column is missing", {
   # uni_data_dir <- config_test$univariate_episodes$data_dir
   uni_data_dir <- testthat::test_path("data", "univariate_episodes")
   # sql_dir <- file.path(config_t3$T3$root, config_t3$T3$sql_dir)
