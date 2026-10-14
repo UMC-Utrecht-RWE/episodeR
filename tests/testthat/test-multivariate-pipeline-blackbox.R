@@ -71,15 +71,18 @@ testthat::test_that("multivariate_episodes_pipeline produces correct output acro
   on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
   sql_dir <- system.file(package = "episodeR", "sql/")
-  multivariate_episodes_pipeline(
-    study_variables = sv_meta,
-    con = con,
-    d3_univariate_episodes_path = uni_hive_dir,
-    sql_dir = sql_dir,
-    output_path = output_dir,
-    person_ids = paste0("P", 1:10),
-    batch_column = "batch",
-    data_type_col = "data_type"
+  testthat::expect_warning(
+    multivariate_episodes_pipeline(
+      study_variables = sv_meta,
+      con = con,
+      d3_univariate_episodes_path = uni_hive_dir,
+      sql_dir = sql_dir,
+      output_path = output_dir,
+      person_ids = paste0("P", 1:10),
+      batch_column = "batch",
+      data_type_col = "data_type"
+    ),
+    "will be deprecated"
   )
 
   actual <- data.table::as.data.table(DBI::dbGetQuery(
@@ -228,15 +231,18 @@ testthat::test_that("multivariate_episodes_pipeline round-trips correctly on rea
 
   sv_meta_batched <- sv_meta
   sv_meta_batched$batch <- TRUE
-  multivariate_episodes_pipeline(
-    study_variables = sv_meta_batched,
-    con = con,
-    d3_univariate_episodes_path = uni_hive_dir,
-    sql_dir = sql_dir,
-    output_path = output_dir,
-    person_ids = persons,
-    batch_column = "batch",
-    data_type_col = "data_type"
+  testthat::expect_warning(
+    multivariate_episodes_pipeline(
+      study_variables = sv_meta_batched,
+      con = con,
+      d3_univariate_episodes_path = uni_hive_dir,
+      sql_dir = sql_dir,
+      output_path = output_dir,
+      person_ids = persons,
+      batch_column = "batch",
+      data_type_col = "data_type"
+    ),
+    "will be deprecated"
   )
 
   actual_multi <- data.table::as.data.table(DBI::dbGetQuery(
@@ -315,7 +321,7 @@ testthat::test_that("multivariate_episodes_pipeline produces identical output wh
       batch_column = "batch", data_type_col = "data_type"
     )
     if (!is.null(batch_size)) args$batch_size <- batch_size
-    do.call(multivariate_episodes_pipeline, args)
+    testthat::expect_warning(do.call(multivariate_episodes_pipeline, args), "will be deprecated")
 
     read_glob <- if (dir.exists(output_path)) file.path(output_path, "*.parquet") else output_path
     out <- data.table::as.data.table(DBI::dbGetQuery(con, sprintf("SELECT * FROM read_parquet('%s')", read_glob)))
@@ -407,15 +413,18 @@ testthat::test_that("multivariate_episodes_pipeline combines 3 simultaneous vari
   on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
   sql_dir <- system.file(package = "episodeR", "sql/")
-  multivariate_episodes_pipeline(
-    study_variables = sv_meta,
-    con = con,
-    d3_univariate_episodes_path = uni_hive_dir,
-    sql_dir = sql_dir,
-    output_path = output_dir,
-    person_ids = paste0("P", 1:10),
-    batch_column = "batch",
-    data_type_col = "data_type"
+  testthat::expect_warning(
+    multivariate_episodes_pipeline(
+      study_variables = sv_meta,
+      con = con,
+      d3_univariate_episodes_path = uni_hive_dir,
+      sql_dir = sql_dir,
+      output_path = output_dir,
+      person_ids = paste0("P", 1:10),
+      batch_column = "batch",
+      data_type_col = "data_type"
+    ),
+    "will be deprecated"
   )
 
   actual <- data.table::as.data.table(DBI::dbGetQuery(
@@ -522,15 +531,18 @@ testthat::test_that("multivariate_episodes_pipeline combines 10 simultaneous var
   on.exit(unlink(output_dir, recursive = TRUE, force = TRUE), add = TRUE)
 
   sql_dir <- system.file(package = "episodeR", "sql/")
-  multivariate_episodes_pipeline(
-    study_variables = sv_meta,
-    con = con,
-    d3_univariate_episodes_path = uni_hive_dir,
-    sql_dir = sql_dir,
-    output_path = output_dir,
-    person_ids = paste0("P", 1:5),
-    batch_column = "batch",
-    data_type_col = "data_type"
+  testthat::expect_warning(
+    multivariate_episodes_pipeline(
+      study_variables = sv_meta,
+      con = con,
+      d3_univariate_episodes_path = uni_hive_dir,
+      sql_dir = sql_dir,
+      output_path = output_dir,
+      person_ids = paste0("P", 1:5),
+      batch_column = "batch",
+      data_type_col = "data_type"
+    ),
+    "will be deprecated"
   )
 
   actual <- data.table::as.data.table(DBI::dbGetQuery(

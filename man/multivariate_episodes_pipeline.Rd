@@ -27,7 +27,10 @@ D3_UNIVARIATE_EPISODES hive-partitioned parquet folder.}
 
 \item{sql_dir}{Directory containing multi_epi_*.sql pipeline scripts.}
 
-\item{output_path}{Full file path for the output parquet file.}
+\item{output_path}{For an unbatched run, the full file path for the
+output parquet file. For a batched run, a directory path instead: it is
+created (any existing contents are cleared first) and populated with
+one hive-style parquet file per batch (batch_00001.parquet, ...).}
 
 \item{person_ids}{Optional vector of person_ids. If NULL, derived from
 distinct person_ids in the univariate episodes input.}
@@ -45,8 +48,9 @@ the target data type for each variable (e.g. BOOL, NUM, INT, CHAR, DATE).
 Defaults to "data_type". Set to NULL to skip type conversion.}
 }
 \value{
-Invisibly returns NULL; writes D3_MULTIVARIATE_EPISODES parquet
-to output_path.
+Invisibly returns NULL. For an unbatched run, writes a single
+D3_MULTIVARIATE_EPISODES parquet file to output_path. For a batched
+run, writes one parquet file per batch into the output_path directory.
 }
 \description{
 Processes D3_UNIVARIATE_EPISODES hive-partitioned parquet into a wide
@@ -54,3 +58,11 @@ multivariate combination table (D3_MULTIVARIATE_EPISODES), processing
 persons in batches of batch_size and appending each batch into a single
 accumulator table before writing the final table to parquet once.
 }
+\section{Upcoming deprecation}{
+
+\code{multivariate_episodes_pipeline()} will be deprecated in a future release
+in favour of \code{\link[=create_multivariate_episodes]{create_multivariate_episodes()}}, which reads the same SQL
+steps in a more efficient way. It is not yet deprecated, but new code
+should prefer \code{\link[=create_multivariate_episodes]{create_multivariate_episodes()}}.
+}
+
