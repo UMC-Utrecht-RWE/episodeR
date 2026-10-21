@@ -44,12 +44,18 @@ picard::audit_start(
 
 # Load study variables metadata ---
 logger::log_info("Loading study variables metadata from BRIDGE.")
-sv_meta <- data.table::fread(file.path(config_pipeline$common$dir_bridge, "study_variables.csv"))
+sv_meta <- data.table::fread(file.path(
+  config_pipeline$common$dir_bridge,
+  "study_variables.csv"
+))
 
 # Filter to eligibility == TRUE ---
 logger::log_info("Filtering study variables to eligibility == TRUE.")
 sv_meta <- sv_meta[eligibility == TRUE]
-logger::log_info(paste0("Number of study variables with eligibility = TRUE: ", nrow(sv_meta)))
+logger::log_info(paste0(
+  "Number of study variables with eligibility = TRUE: ",
+  nrow(sv_meta)
+))
 
 # Preprocess look-back columns (convert to non-negative integer) ---
 sv_meta[, start_look_back := abs(as.integer(start_look_back))]
@@ -75,15 +81,18 @@ sql_dir <- system.file("sql", package = "episodeR")
 # Run the multivariate episodes pipeline ---
 logger::log_info("Running episodeR::multivariate_episodes_pipeline.")
 episodeR::multivariate_episodes_pipeline(
-  study_variables             = sv_meta,
-  con                         = con,
-  d3_univariate_episodes_path = file.path(dir_d3, mv_config$d3_univariate_episodes),
-  sql_dir                     = sql_dir,
-  output_path                 = file.path(dir_d3, mv_config$output_path),
-  person_ids                  = person_ids,
-  batch_size                  = mv_config$batch_size,
-  batch_column                = "batch",
-  data_type_col               = "data_type"
+  study_variables = sv_meta,
+  con = con,
+  d3_univariate_episodes_path = file.path(
+    dir_d3,
+    mv_config$d3_univariate_episodes
+  ),
+  sql_dir = sql_dir,
+  output_path = file.path(dir_d3, mv_config$output_path),
+  person_ids = person_ids,
+  batch_size = mv_config$batch_size,
+  batch_column = "batch",
+  data_type_col = "data_type"
 )
 
 DBI::dbDisconnect(con, shutdown = TRUE)

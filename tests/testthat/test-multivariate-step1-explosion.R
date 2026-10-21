@@ -135,13 +135,23 @@ test_that("a variable_id with two distinct values gets two dictionary entries th
   expect_false(id_a == id_b)
 
   exploded <- DBI::dbGetQuery(con, "SELECT * FROM EXPLODED ORDER BY dates")
-  expect_true(all(exploded$int_var_id[as.Date(exploded$dates) <= "2024-01-02"] == id_a))
-  expect_true(all(exploded$int_var_id[as.Date(exploded$dates) >= "2024-01-05"] == id_b))
+  expect_true(all(
+    exploded$int_var_id[as.Date(exploded$dates) <= "2024-01-02"] == id_a
+  ))
+  expect_true(all(
+    exploded$int_var_id[as.Date(exploded$dates) >= "2024-01-05"] == id_b
+  ))
 })
 
 test_that("a NULL value gets its own dictionary entry and joins via IS NULL, not lost", {
   con <- new_test_con()
-  episodes <- uni_epi_row("P1", "VAR1", NA_character_, "2024-01-01", "2024-01-03")
+  episodes <- uni_epi_row(
+    "P1",
+    "VAR1",
+    NA_character_,
+    "2024-01-01",
+    "2024-01-03"
+  )
   run_explosion(con, episodes, persons = "P1", variables = "VAR1")
 
   dim_var <- DBI::dbGetQuery(con, "SELECT * FROM dim_var")
@@ -190,7 +200,10 @@ test_that("different persons explode independently and never mix rows", {
   )
   run_explosion(con, episodes, persons = c("P1", "P2"), variables = "VAR1")
 
-  out <- DBI::dbGetQuery(con, "SELECT person_id, COUNT(*) AS n FROM EXPLODED GROUP BY person_id ORDER BY person_id")
+  out <- DBI::dbGetQuery(
+    con,
+    "SELECT person_id, COUNT(*) AS n FROM EXPLODED GROUP BY person_id ORDER BY person_id"
+  )
   expect_equal(out$person_id, c("P1", "P2"))
   expect_equal(out$n, c(3, 2))
 })
@@ -232,8 +245,14 @@ test_that("10 persons exercise batch/study-variable filtering, dictionary reuse,
     variables = c("VAR1", "VAR2")
   )
 
-  out <- data.table::as.data.table(DBI::dbGetQuery(con, "SELECT * FROM EXPLODED"))
-  dim_var <- data.table::as.data.table(DBI::dbGetQuery(con, "SELECT * FROM dim_var"))
+  out <- data.table::as.data.table(DBI::dbGetQuery(
+    con,
+    "SELECT * FROM EXPLODED"
+  ))
+  dim_var <- data.table::as.data.table(DBI::dbGetQuery(
+    con,
+    "SELECT * FROM dim_var"
+  ))
 
   # 1+5+10+6+3+0+0+1+14+10 rows for P1..P10
   expect_equal(nrow(out), 50)
@@ -249,7 +268,9 @@ test_that("10 persons exercise batch/study-variable filtering, dictionary reuse,
   expect_false("VAR3" %in% dim_var$variable_id)
 
   # P1 and P8 both use (VAR1, "A") and must share one dictionary entry.
-  id_var1_a <- dim_var$int_var_id[dim_var$variable_id == "VAR1" & dim_var$value %in% "A"]
+  id_var1_a <- dim_var$int_var_id[
+    dim_var$variable_id == "VAR1" & dim_var$value %in% "A"
+  ]
   p1_ids <- unique(out[person_id == "P1"]$int_var_id)
   p8_ids <- unique(out[person_id == "P8"]$int_var_id)
   expect_equal(p1_ids, id_var1_a)
@@ -270,10 +291,13 @@ test_that("two concurrently-active variables for the same person both appear on 
   )
   run_explosion(con, episodes, persons = "P1", variables = c("VAR1", "VAR2"))
 
-  out <- DBI::dbGetQuery(con, "
+  out <- DBI::dbGetQuery(
+    con,
+    "
     SELECT dates, COUNT(*) AS n
     FROM EXPLODED GROUP BY dates ORDER BY dates
-  ")
+  "
+  )
   # 01-01/02: VAR1 only: n=1. 01-03..05: both: n=2. 01-06/07: VAR2 only: n=1.
   expect_equal(nrow(out), 7)
   expect_equal(out$n, c(1, 1, 2, 2, 2, 1, 1))
