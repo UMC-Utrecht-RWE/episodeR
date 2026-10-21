@@ -1,9 +1,11 @@
 ^renv$
 ^renv\.lock$
 ^LICENSE\.md$
-.sqlfluff
+^\.sqlfluff
 ^\.github$
 ^\.lintr$
+^experimentation$
+^\.Rprofile$
 ^\.covrignore$
 ^\.pre-commit-config\.yaml$
 ^\.git-blame-ignore-revs$
@@ -13,8 +15,7 @@
 ^pkgdown$
 ^\.Rproj\.user$
 ^\.vscode$
-*.DS_Store
-logs/*
-*.txt
-*~$*
+^\.DS_Store
 ^[.]?air[.]toml$
+^logs$
+~$
