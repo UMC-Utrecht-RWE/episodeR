@@ -4,7 +4,6 @@
 .sqlfluff
 ^\.github$
 ^\.lintr$
-^air\.toml$
 ^\.covrignore$
 ^\.pre-commit-config\.yaml$
 ^\.git-blame-ignore-revs$
@@ -18,3 +17,4 @@
 logs/*
 *.txt
 *~$*
+^[.]?air[.]toml$
