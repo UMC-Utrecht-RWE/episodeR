@@ -80,7 +80,10 @@ testthat::test_that("Multivariate episodes pipeline produces expected output", {
   actual <- data.table::as.data.table(
     DBI::dbGetQuery(
       con,
-      sprintf("SELECT * FROM read_parquet('%s')", file.path(output_dir, "*.parquet"))
+      sprintf(
+        "SELECT * FROM read_parquet('%s')",
+        file.path(output_dir, "*.parquet")
+      )
     )
   )
   actual[, start_episode := as.Date(start_episode)]

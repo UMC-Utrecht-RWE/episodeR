@@ -89,7 +89,9 @@ create_multivariate_episodes <- function(
     d3_univariate_episodes_path
   )
 
-  sql_build_episodes <- read_sql("create_multivariate_episodes_2_combine_and_pivot.sql")
+  sql_build_episodes <- read_sql(
+    "create_multivariate_episodes_2_combine_and_pivot.sql"
+  )
 
   # Batching is a safety net for cohorts too large to fit in memory in one
   # pass -- not the default path. It only activates when a
@@ -123,7 +125,9 @@ create_multivariate_episodes <- function(
         "the single-pass path; prefer raising batch_size when the cohort",
         "fits in memory."
       ),
-      n_persons, batch_size, batch_column
+      n_persons,
+      batch_size,
+      batch_column
     ))
   }
 
@@ -139,7 +143,11 @@ create_multivariate_episodes <- function(
 
   for (i_batch in seq_along(batch_starts)) {
     if (is_batched_run) {
-      logger::log_info(sprintf("Processing batch %d of %d", i_batch, length(batch_starts)))
+      logger::log_info(sprintf(
+        "Processing batch %d of %d",
+        i_batch,
+        length(batch_starts)
+      ))
     }
     from <- batch_starts[i_batch]
     to <- min(from + step - 1L, n_persons)
