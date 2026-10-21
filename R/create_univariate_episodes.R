@@ -22,15 +22,18 @@
 ##' If provided, must be a character or numeric vector of person_ids.
 ##' @param concepts_table Character scalar naming the concepts source
 ##' table/view. If different from D3_CONCEPTS, it is aliased as D3_CONCEPTS.
-##' @param sql_dir Directory containing create_univariate_episodes_*.sql
-##' pipeline scripts.
 ##' @param start_study_date Study period start date.
 ##' @param end_date_missing_inclusion Study period end date.
 ##' @param output_hive_path Directory path where parquet hive output
-##' partitions will be written after each full 5-step pipeline execution.
+##' partitions will be written after each full 4-step pipeline execution.
 ##' @param batch_size Maximum number of persons per batch. Cohorts larger than
 ##' this are split into batches, even for variables not flagged via
-##' batch_column; smaller cohorts run as a single pass. Defaults to 5000.
+##' batch_column; smaller cohorts run as a single pass. Defaults to 50000 --
+##' this function's single-pass path is cheap per person (unlike
+##' [create_multivariate_episodes()]'s wide combination table), so
+##' benchmarking on a 100K-person/10-variable cohort showed unbatched runs
+##' consistently fastest with no memory pressure; 50000 keeps batching as a
+##' real safety net for larger cohorts while capturing most of that gain.
 ##' @param batch_column Name of Boolean column in study_variables
 ##' indicating whether a variable should always be processed in batches.
 ##' batch_size is otherwise the driver: a cohort larger than batch_size is
@@ -49,28 +52,27 @@
 #' @import data.table
 #' @export
 create_univariate_episodes <- function(
-    study_variables,
-    con,
-    person_ids = NULL,
-    concepts_table = "D3_CONCEPTS",
-    sql_dir,
-    start_study_date,
-    end_date_missing_inclusion,
-    output_hive_path,
-    batch_size = 5000L,
-    batch_column = "batch",
-    missing_col = NULL) {
+  study_variables,
+  con,
+  person_ids = NULL,
+  concepts_table = "D3_CONCEPTS",
+  start_study_date,
+  end_date_missing_inclusion,
+  output_hive_path,
+  batch_size = 50000L,
+  batch_column = "batch",
+  missing_col = NULL
+) {
   if (missing(output_hive_path) || !nzchar(output_hive_path)) {
     stop("output_hive_path must be provided and non-empty.")
   }
-  dir.create(output_hive_path, recursive = TRUE, showWarnings = FALSE)
+  validate_connection(con)
+  validate_data_frame(study_variables, "study_variables")
+  validate_batch_size(batch_size)
+  validate_required_columns(study_variables, c("concept_id", "variable_id"))
+  use_batch <- validate_batch_column(study_variables, batch_column)
 
-  if (!(batch_column %in% names(study_variables))) {
-    stop(sprintf(
-      "study_variables must include a Boolean '%s' column to control batching per variable.",
-      batch_column
-    ))
-  }
+  dir.create(output_hive_path, recursive = TRUE, showWarnings = FALSE)
 
   # Resolve missing_set_to column.
   # If missing_col is NULL, fill with NA (becomes NULL in DuckDB).
@@ -103,23 +105,6 @@ create_univariate_episodes <- function(
       )
     )
   }
-  batch_values <- study_variables[[batch_column]]
-  if (is.logical(batch_values)) {
-    use_batch <- batch_values
-  } else {
-    normalized <- tolower(trimws(as.character(batch_values)))
-    use_batch <- normalized %in% c("true", "t", "1", "yes", "y")
-    invalid_batch_values <- !(normalized %in%
-      c("true", "t", "1", "yes", "y", "false", "f", "0", "no", "n", "", "na"))
-    if (any(invalid_batch_values, na.rm = TRUE)) {
-      stop(sprintf(
-        "Column '%s' must contain only Boolean-like values (TRUE/FALSE, 1/0, yes/no).",
-        batch_column
-      ))
-    }
-  }
-  use_batch[is.na(use_batch)] <- FALSE
-
   sv_non_batch <- study_variables[!use_batch, , drop = FALSE]
   sv_batch <- study_variables[use_batch, , drop = FALSE]
 
@@ -142,9 +127,11 @@ create_univariate_episodes <- function(
     start_study_date = sprintf("'%s'", as.character(start_study_date)),
     end_study_date = sprintf("'%s'", as.character(end_date_missing_inclusion))
   )
-  run_univariate_pipeline <- function(sv_subset,
-                                      person_filter_query,
-                                      output_hive_path) {
+  run_univariate_pipeline <- function(
+    sv_subset,
+    person_filter_query,
+    output_hive_path
+  ) {
     if (nrow(sv_subset) == 0) {
       return()
     }
@@ -168,10 +155,10 @@ create_univariate_episodes <- function(
       sprintf("CREATE OR REPLACE VIEW all_persons AS %s", person_filter_query)
     )
 
-    picard::execute_sql_file(
-      sql = picard::load_sql_query(
-        file.path(sql_dir, "create_univariate_episodes_1_generate_initial_spells.sql"),
-        params = c(
+    DBI::dbExecute(
+      con,
+      glue::glue_data(
+        c(
           list(
             concept_id_list = paste(
               sprintf("'%s'", concept_ids),
@@ -179,40 +166,30 @@ create_univariate_episodes <- function(
             )
           ),
           params_common
-        )
-      ),
-      conn = con
+        ),
+        read_sql("create_univariate_episodes_1_generate_initial_spells.sql")
+      )
     )
 
-    picard::execute_sql_file(
-      sql = picard::load_sql_query(
-        file.path(sql_dir, "create_univariate_episodes_2_fill_gap_spells.sql"),
-        params = params_common
-      ),
-      conn = con
+    DBI::dbExecute(
+      con,
+      glue::glue_data(
+        params_common,
+        read_sql("create_univariate_episodes_2_fill_gap_spells.sql")
+      )
     )
 
-    picard::execute_sql_file(
-      sql = picard::load_sql_query(
-        file.path(sql_dir, "create_univariate_episodes_3_add_missing_persons.sql"),
-        params = params_common
-      ),
-      conn = con
+    DBI::dbExecute(
+      con,
+      glue::glue_data(
+        params_common,
+        read_sql("create_univariate_episodes_3_add_missing_persons.sql")
+      )
     )
 
-    picard::execute_sql_file(
-      sql = picard::load_sql_query(
-        file.path(sql_dir, "create_univariate_episodes_4_trim_to_study_period.sql"),
-        params = params_common
-      ),
-      conn = con
-    )
-
-    picard::execute_sql_file(
-      sql = picard::load_sql_query(
-        file.path(sql_dir, "create_univariate_episodes_5_chain_merge_episodes.sql")
-      ),
-      conn = con
+    DBI::dbExecute(
+      con,
+      read_sql("create_univariate_episodes_4_chain_merge_episodes.sql")
     )
 
     DBI::dbExecute(

@@ -597,13 +597,11 @@ testthat::test_that("create_multivariate_episodes: batch_size threshold alone tr
 })
 
 testthat::test_that("create_multivariate_episodes only processes variable_id(s) declared in study_variables", {
-  # Regression test: multivariate_episodes_pipeline() builds a list_sv
-  # table from study_variables$variable_id and filters multi_epi_1_explosion.sql
-  # to it (R/multivariate_episodes_pipeline.R, multi_epi_1_explosion.sql).
-  # create_multivariate_episodes() currently has no equivalent filter --
-  # multi_initial.sql reads read_parquet({d3_univariate_episodes_path}) with
-  # no variable_id restriction at all (its list_sv join is commented out).
-  # study_variables here only declares VAR1/VAR2; VAR3 is present in the
+  # Regression test: create_multivariate_episodes() builds a list_sv table
+  # from study_variables$variable_id and filters
+  # create_multivariate_episodes_1_encode_variables.sql to it, mirroring
+  # multivariate_episodes_pipeline()'s list_sv filter on
+  # multi_epi_1_explosion.sql. study_variables here only declares VAR1/VAR2; VAR3 is present in the
   # univariate input but undeclared, and changes value partway through the
   # study period for P1. An undeclared variable leaking in doesn't just add
   # a stray output column -- since combination/episode boundaries are
