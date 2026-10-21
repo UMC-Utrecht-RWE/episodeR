@@ -44,17 +44,18 @@
 #' @import data.table
 #' @export
 univariate_episodes_pipeline <- function(
-    study_variables,
-    con,
-    person_ids = NULL,
-    concepts_table = "D3_CONCEPTS",
-    sql_dir,
-    start_study_date,
-    end_date_missing_inclusion,
-    output_hive_path,
-    batch_size = 5000L,
-    batch_column = "batch",
-    missing_col = NULL) {
+  study_variables,
+  con,
+  person_ids = NULL,
+  concepts_table = "D3_CONCEPTS",
+  sql_dir,
+  start_study_date,
+  end_date_missing_inclusion,
+  output_hive_path,
+  batch_size = 5000L,
+  batch_column = "batch",
+  missing_col = NULL
+) {
   warning(
     "univariate_episodes_pipeline() will be deprecated in a future release ",
     "in favour of create_univariate_episodes(). Consider migrating.",
@@ -128,9 +129,11 @@ univariate_episodes_pipeline <- function(
     start_study_date = sprintf("'%s'", as.character(start_study_date)),
     end_study_date = sprintf("'%s'", as.character(end_date_missing_inclusion))
   )
-  run_univariate_pipeline <- function(sv_subset,
-                                      person_filter_query,
-                                      output_hive_path) {
+  run_univariate_pipeline <- function(
+    sv_subset,
+    person_filter_query,
+    output_hive_path
+  ) {
     if (nrow(sv_subset) == 0) {
       return()
     }

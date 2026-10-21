@@ -38,23 +38,34 @@ testthat::test_that("univariate_episodes_pipeline + multivariate_episodes_pipeli
   # dated events (some before start_study_date, to exercise look-back/MRR
   # cropping; some NA values, to exercise NULL handling); ~10% of pairs are
   # skipped entirely, to exercise the missing-person gap-fill default.
-  candidate_days <- seq(as.Date("2023-09-01"), as.Date("2024-11-30"), by = "day")
+  candidate_days <- seq(
+    as.Date("2023-09-01"),
+    as.Date("2024-11-30"),
+    by = "day"
+  )
   concept_rows <- vector("list", n_persons * n_vars)
   idx <- 0L
   for (p in persons) {
     for (k in seq_len(n_vars)) {
       idx <- idx + 1L
-      if (runif(1) < 0.10) next
+      if (runif(1) < 0.10) {
+        next
+      }
 
       n_events <- sample(1:3, 1, prob = c(0.5, 0.3, 0.2))
       event_dates <- sort(sample(candidate_days, n_events))
-      event_values <- sample(c(value_pool, NA_character_), n_events,
-        replace = TRUE, prob = c(0.3, 0.3, 0.3, 0.1)
+      event_values <- sample(
+        c(value_pool, NA_character_),
+        n_events,
+        replace = TRUE,
+        prob = c(0.3, 0.3, 0.3, 0.1)
       )
 
       concept_rows[[idx]] <- data.frame(
-        person_id = p, concept_id = concept_ids[k],
-        date = event_dates, value = event_values,
+        person_id = p,
+        concept_id = concept_ids[k],
+        date = event_dates,
+        value = event_values,
         stringsAsFactors = FALSE
       )
     }
@@ -122,15 +133,20 @@ testthat::test_that("univariate_episodes_pipeline + multivariate_episodes_pipeli
   testthat::expect_true(all(actual_uni$start_episode <= actual_uni$end_episode))
 
   data.table::setorder(actual_uni, person_id, variable_id, start_episode)
-  coverage <- actual_uni[, .(
-    n_days = sum(as.integer(end_episode - start_episode) + 1L),
-    min_start = min(start_episode),
-    max_end = max(end_episode),
-    n_segments = .N,
-    # every segment after the first must start exactly one day after the
-    # previous segment's end -- full, gap-free, non-overlapping coverage
-    n_gap_or_overlap_violations = sum(start_episode[-1] != end_episode[-.N] + 1)
-  ), by = .(person_id, variable_id)]
+  coverage <- actual_uni[,
+    .(
+      n_days = sum(as.integer(end_episode - start_episode) + 1L),
+      min_start = min(start_episode),
+      max_end = max(end_episode),
+      n_segments = .N,
+      # every segment after the first must start exactly one day after the
+      # previous segment's end -- full, gap-free, non-overlapping coverage
+      n_gap_or_overlap_violations = sum(
+        start_episode[-1] != end_episode[-.N] + 1
+      )
+    ),
+    by = .(person_id, variable_id)
+  ]
 
   expected_days <- as.integer(end_study_date - start_study_date) + 1L
   testthat::expect_equal(nrow(coverage), n_persons * n_vars)
@@ -182,9 +198,12 @@ testthat::test_that("univariate_episodes_pipeline + multivariate_episodes_pipeli
 
   # every person's combined episodes must also fully cover the study
   # period with no gaps
-  multi_coverage <- actual_multi[, .(
-    n_days = sum(as.integer(end_episode - start_episode) + 1L)
-  ), by = person_id]
+  multi_coverage <- actual_multi[,
+    .(
+      n_days = sum(as.integer(end_episode - start_episode) + 1L)
+    ),
+    by = person_id
+  ]
   testthat::expect_equal(nrow(multi_coverage), n_persons)
   testthat::expect_true(all(multi_coverage$n_days == expected_days))
 })
