@@ -1,0 +1,47 @@
+# Git hooks for RWE ecosystem packages, run on every `git commit`.
+# One-time setup per machine:  install.packages("precommit"); precommit::install_precommit()
+# Then, in each package clone:  precommit::use_precommit()
+# Run on all files manually:    pre-commit run --all-files
+# Skip once (CI still checks):  git commit --no-verify
+#
+# All available hooks: https://pre-commit.com/hooks.html
+# R specific hooks:    https://github.com/lorenzwalthert/precommit
+repos:
+  # Formats staged R files with Air (settings from air.toml); the commit is
+  # aborted so you can review and re-stage the changes. Same check as CI.
+  - repo: https://github.com/posit-dev/air-pre-commit
+    rev: 0.12.0
+    hooks:
+      - id: air-format
+
+  - repo: https://github.com/lorenzwalthert/precommit
+    rev: v0.4.3
+    hooks:
+      # Same rules as CI: uses the package's .lintr.
+      - id: lintr
+      - id: parsable-R
+      - id: no-browser-statement
+      - id: no-debug-statement
+      # pkg::fun() calls must have pkg declared in DESCRIPTION.
+      - id: deps-in-desc
+      - id: readme-rmd-rendered
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=200"]
+      - id: end-of-file-fixer
+        exclude: '\.Rd$'
+      - id: file-contents-sorter
+        files: '^\.Rbuildignore$'
+
+  - repo: local
+    hooks:
+      # Never commit R session artifacts or saved data (may contain patient data).
+      - id: forbid-to-commit
+        name: Don't commit common R artifacts
+        entry: Cannot commit .Rhistory, .RData, .Rds or .rds.
+        language: fail
+        files: '\.(Rhistory|RData|Rds|rds)$'
+        # Add `exclude: <regex>` to allow specific files, e.g. test fixtures.
