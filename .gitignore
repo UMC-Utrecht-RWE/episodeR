@@ -1,12 +1,49 @@
-.Rproj.user
+# R session files
 .Rhistory
 .RData
+.RDataTmp
 .Ruserdata
+
+# RStudio
+.Rproj.user/
+
+# Secrets and local environment: never commit
+.Renviron
+.httr-oauth
+
+# VS Code / Positron: share only the Air settings and extension recommendations
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# R CMD build / check output
+/*.tar.gz
+/*.Rcheck/
+*-Ex.R
+
+# pkgdown site (built and deployed by CI to the gh-pages branch)
+docs/
+
+# Built vignettes and R Markdown temporaries
+/doc/
+/Meta/
+inst/doc
+vignettes/*.html
+vignettes/*.pdf
+*_cache/
+/cache/
+*.utf8.md
+*.knit.md
+
+# Logs
+*.log
+
+# OS files
 *.DS_Store
-.vscode/
-logs/*
-*.txt
-*~$*
+Thumbs.db
+
+# translation temp files
+po/*~
 
 data/D3_study_variables/*
 !data/D3_study_variables/.gitkeep
@@ -17,7 +54,3 @@ configuration/*
 
 transformations/common_configuration/*
 !transformations/common_configuration/.gitkeep
-
-vscode/
-
-
