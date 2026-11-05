@@ -112,9 +112,9 @@ testthat::test_that("batched run matches the single-batch expected output", {
 
   uni_hive_dir <- file.path(tempdir(), "multi_test_uni_hive_batched")
   output_parquet <- file.path(tempdir(), "multi_test_batched.parquet")
-  # When batching, the pipeline writes one parquet file per batch into this
-  # directory instead of writing a single file at output_path.
-  batch_output_dir <- file.path(dirname(output_parquet), "D3_MULTIVARIATE_EPISODES")
+  # When batching, output_path is a directory that receives one parquet file
+  # per batch instead of a single file.
+  batch_output_dir <- output_parquet
   unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
   unlink(output_parquet, force = TRUE)
   unlink(batch_output_dir, recursive = TRUE, force = TRUE)
