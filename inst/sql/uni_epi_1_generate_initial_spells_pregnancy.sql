@@ -54,23 +54,32 @@ WITH
         -- Standard mode (excluding_pregnancies = FALSE / NULL):
         -- concept date falls inside pregnancy window; episode from concept date
         -- to pregnancy_end_date with the original concept value.
+        -- Special case for PP_MULTIFP: when the concept date falls in the
+        -- end_look_back window *after* pregnancy_end_date (i.e. the event
+        -- was recorded post-delivery), the episode spans the full
+        -- pregnancy (lmp_date -> pregnancy_end_date) rather than starting
+        -- at the (post-delivery) concept date.
         SELECT DISTINCT
             c.person_id,
             sv.variable_id,
             c.value,
-            c.date AS start_episode,
+           CASE
+                WHEN c.concept_id = 'PP_MULTIFP'
+                AND c.date > pw.pregnancy_end_date THEN pw.lmp_date
+                WHEN c.date > pw.pregnancy_end_date THEN pw.pregnancy_end_date
+                ELSE c.date
+            END AS start_episode,
             pw.pregnancy_end_date AS end_episode
         FROM
             concept_dedup c
             JOIN study_variables sv ON c.concept_id = sv.concept_id
             JOIN pregnancy_episode_windows pw ON pw.person_id = c.person_id
             AND COALESCE(UPPER(TRIM(CAST(pw.value AS VARCHAR))), '') IN ('TRUE', 'T', '1', 'YES', 'Y')
-            AND c.date BETWEEN pw.lmp_date - CAST(sv.start_look_back AS INTEGER) AND (
-                CASE
-                    WHEN UPPER(TRIM(CAST(sv.anchor_date_end AS VARCHAR))) = 'LMP_DATE' THEN pw.lmp_date
-                    ELSE pw.pregnancy_end_date
-                END
-            ) + CAST(sv.end_look_back AS INTEGER)
+            AND c.date BETWEEN pw.lmp_date + CAST(sv.start_look_back AS INTEGER) 
+            AND 
+            CASE WHEN sv.anchor_date_end = 'lmp_date' THEN pw.lmp_date + CAST(sv.end_look_back AS INTEGER)
+            ELSE pw.pregnancy_end_date + CAST(sv.end_look_back AS INTEGER)
+            END
         WHERE
             c.concept_id IN ({concept_id_list})
             AND COALESCE(
@@ -94,7 +103,7 @@ WITH
             JOIN study_variables sv ON c.concept_id = sv.concept_id
             JOIN pregnancy_episode_windows pw ON pw.person_id = c.person_id
             AND COALESCE(UPPER(TRIM(CAST(pw.value AS VARCHAR))), '') IN ('TRUE', 'T', '1', 'YES', 'Y')
-            AND c.date BETWEEN pw.lmp_date - CAST(sv.start_look_back AS INTEGER) AND pw.lmp_date
+            AND c.date BETWEEN pw.lmp_date + CAST(sv.start_look_back AS INTEGER) AND pw.lmp_date
         WHERE
             c.concept_id IN ({concept_id_list})
             AND COALESCE(
