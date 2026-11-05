@@ -1,3 +1,7 @@
+# episodeR (development version)
+
+- Fixed bug in `multivariate_episodes_pipeline()` where batched runs always wrote to `<dirname(output_path)>/D3_MULTIVARIATE_EPISODES`, ignoring `output_path`. For batched runs `output_path` is now the output directory; a warning is logged when this differs from the previous location.
+
 # episodeR 0.0.3
 
 - This version is to be used to provide a stable release where the package versions in DESCRIPTION and release will match
