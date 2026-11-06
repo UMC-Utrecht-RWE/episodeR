@@ -177,6 +177,19 @@ testthat::test_that("batched run matches the single-batch expected output", {
   data.table::setcolorder(actual, names(expected))
 
   testthat::expect_equal(actual, expected)
+
+  # The batched run must also leave the combined result in DuckDB, as the
+  # unbatched run does.
+  testthat::expect_true(DBI::dbExistsTable(con, "D3_MULTIVARIATE_EPISODES"))
+  actual_tbl <- data.table::as.data.table(DBI::dbReadTable(
+    con,
+    "D3_MULTIVARIATE_EPISODES"
+  ))
+  actual_tbl[, start_episode := as.Date(start_episode)]
+  actual_tbl[, end_episode := as.Date(end_episode)]
+  data.table::setorder(actual_tbl, person_id, start_episode)
+  data.table::setcolorder(actual_tbl, names(expected))
+  testthat::expect_equal(actual_tbl, expected)
 })
 
 testthat::test_that("multivariate_episodes_pipeline errors when batch column is missing", {

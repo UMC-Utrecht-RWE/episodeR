@@ -29,7 +29,9 @@
 ##'
 ##' @return Invisibly returns NULL. For an unbatched run, writes a single
 ##' D3_MULTIVARIATE_EPISODES parquet file to output_path. For a batched run,
-##' writes one parquet file per batch into the output_path directory.
+##' writes one parquet file per batch into the output_path directory. In both
+##' cases the combined result is also left in the D3_MULTIVARIATE_EPISODES
+##' table on con.
 #'
 #' @import data.table
 #' @export
@@ -248,6 +250,10 @@ multivariate_episodes_pipeline <- function(
     dir.create(batch_output_dir, recursive = TRUE, showWarnings = FALSE)
   }
 
+  # Start from an empty table so repeated runs on the same connection don't
+  # append onto a previous run's rows.
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS D3_MULTIVARIATE_EPISODES")
+
   # Attach each batch into a single table, then write it once
   for (i_batch in seq_along(batch_starts)) {
     logger::log_info(sprintf(
@@ -303,7 +309,20 @@ multivariate_episodes_pipeline <- function(
 
   logger::log_info("Batch processing complete")
 
-  if (!is_batched_run) {
+  if (is_batched_run) {
+    # Mirror the unbatched run by also exposing the result as a DuckDB table.
+    # union_by_name because each batch only has columns for the variables
+    # present among its persons.
+    batch_output_dir_sql <- gsub("'", "''", batch_output_dir, fixed = TRUE)
+    DBI::dbExecute(
+      con,
+      sprintf(
+        "CREATE TABLE D3_MULTIVARIATE_EPISODES AS
+         SELECT * FROM read_parquet('%s/*.parquet', union_by_name = true)",
+        batch_output_dir_sql
+      )
+    )
+  } else {
     DBI::dbExecute(
       con,
       sprintf(
