@@ -50,7 +50,9 @@ Defaults to "data_type". Set to NULL to skip type conversion.}
 \value{
 Invisibly returns NULL. For an unbatched run, writes a single
 D3_MULTIVARIATE_EPISODES parquet file to output_path. For a batched run,
-writes one parquet file per batch into the output_path directory.
+writes one parquet file per batch into the output_path directory. In both
+cases the combined result is also left in the D3_MULTIVARIATE_EPISODES
+table on con.
 }
 \description{
 Processes D3_UNIVARIATE_EPISODES hive-partitioned parquet into a wide
