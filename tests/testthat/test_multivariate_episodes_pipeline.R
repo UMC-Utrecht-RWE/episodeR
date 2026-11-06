@@ -192,6 +192,83 @@ testthat::test_that("batched run matches the single-batch expected output", {
   testthat::expect_equal(actual_tbl, expected)
 })
 
+testthat::test_that("batched run matches unbatched run when persons have different variables", {
+  sql_dir <- system.file(package = "episodeR", "sql/")
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  uni_hive_dir <- file.path(tempdir(), "multi_test_uni_hive_disjoint")
+  unbatched_output <- file.path(tempdir(), "multi_test_disjoint_unbatched.parquet")
+  batched_output <- file.path(tempdir(), "multi_test_disjoint_batched")
+  unlink(c(uni_hive_dir, unbatched_output, batched_output), recursive = TRUE, force = TRUE)
+  on.exit(
+    unlink(c(uni_hive_dir, unbatched_output, batched_output), recursive = TRUE, force = TRUE),
+    add = TRUE
+  )
+
+  # P1 only has VAR_A and P2 only has VAR_B, so one-person batches each lack
+  # one of the variable columns. Both are Boolean so the FALSE fill converts
+  # cleanly (a "FALSE" fill on a NUM variable would warn when coerced).
+  uni_epi <- data.table::data.table(
+    person_id = c("P1", "P1", "P2", "P2"),
+    variable_id = c("VAR_A", "VAR_A", "VAR_B", "VAR_B"),
+    value = c(TRUE, FALSE, TRUE, FALSE),
+    start_episode = as.Date(c("2024-01-01", "2024-03-01", "2024-01-01", "2024-02-01")),
+    end_episode = as.Date(c("2024-02-29", "2024-04-30", "2024-01-31", "2024-04-30"))
+  )
+  DBI::dbWriteTable(con, "uni_epi_input", uni_epi, overwrite = TRUE)
+  dir.create(uni_hive_dir, recursive = TRUE, showWarnings = FALSE)
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "COPY uni_epi_input TO '%s' (FORMAT PARQUET, PARTITION_BY (variable_id))",
+      uni_hive_dir
+    )
+  )
+
+  sv_meta <- data.table::data.table(
+    variable_id = c("VAR_A", "VAR_B"),
+    data_type = c("BOOL", "BOOL"),
+    batch = FALSE
+  )
+
+  run_pipeline <- function(output_path, batch_size) {
+    multivariate_episodes_pipeline(
+      study_variables = sv_meta,
+      con = con,
+      d3_univariate_episodes_path = uni_hive_dir,
+      sql_dir = sql_dir,
+      output_path = output_path,
+      person_ids = c("P1", "P2"),
+      batch_size = batch_size,
+      batch_column = "batch"
+    )
+    result <- data.table::as.data.table(DBI::dbReadTable(
+      con,
+      "D3_MULTIVARIATE_EPISODES"
+    ))
+    result[, start_episode := as.Date(start_episode)]
+    result[, end_episode := as.Date(end_episode)]
+    data.table::setorder(result, person_id, start_episode)
+    result
+  }
+
+  unbatched <- run_pipeline(unbatched_output, batch_size = 100)
+  batched <- run_pipeline(batched_output, batch_size = 1)
+
+  testthat::expect_setequal(names(batched), names(unbatched))
+  data.table::setcolorder(batched, names(unbatched))
+  testthat::expect_equal(batched, unbatched)
+
+  # The per-batch parquet files carry the same columns as well
+  batched_files <- data.table::as.data.table(DBI::dbGetQuery(
+    con,
+    sprintf("SELECT * FROM read_parquet('%s/*.parquet')", batched_output)
+  ))
+  testthat::expect_setequal(names(batched_files), names(unbatched))
+})
+
 testthat::test_that("multivariate_episodes_pipeline errors when batch column is missing", {
   # uni_data_dir <- config_test$univariate_episodes$data_dir
   uni_data_dir <- testthat::test_path("data", "univariate_episodes")
@@ -204,14 +281,21 @@ testthat::test_that("multivariate_episodes_pipeline errors when batch column is 
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
+  # A previous result at output_path must survive a failed run
+  output_path <- file.path(tempdir(), "dummy_multi.parquet")
+  unlink(output_path, recursive = TRUE, force = TRUE)
+  writeLines("previous result", output_path)
+  on.exit(unlink(output_path, recursive = TRUE, force = TRUE), add = TRUE)
+
   testthat::expect_error(
     multivariate_episodes_pipeline(
       study_variables = sv_meta,
       con = con,
       d3_univariate_episodes_path = file.path(tempdir(), "dummy_uni_hive"),
       sql_dir = sql_dir,
-      output_path = file.path(tempdir(), "dummy_multi.parquet")
+      output_path = output_path
     ),
     "must include a Boolean"
   )
+  testthat::expect_equal(readLines(output_path), "previous result")
 })
