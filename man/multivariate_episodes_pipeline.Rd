@@ -28,9 +28,10 @@ D3_UNIVARIATE_EPISODES hive-partitioned parquet folder.}
 \item{sql_dir}{Directory containing multi_epi_*.sql pipeline scripts.}
 
 \item{output_path}{For an unbatched run, the full file path for the output
-parquet file. For a batched run, a directory path instead: it is created
-(any existing contents are cleared first) and populated with one parquet
-file per batch (batch_00001.parquet, ...).}
+parquet file. For a batched run, a directory path instead, populated with
+one parquet file per batch (batch_00001.parquet, ...). Output is staged at
+"<output_path>.staging" and replaces any existing file or directory at
+output_path only after the run succeeds.}
 
 \item{person_ids}{Optional vector of person_ids. If NULL, derived from
 distinct person_ids in the univariate episodes input.}
