@@ -116,8 +116,10 @@ testthat::test_that("batched run matches the single-batch expected output", {
   # per batch instead of a single file.
   batch_output_dir <- output_parquet
   unlink(uni_hive_dir, recursive = TRUE, force = TRUE)
-  unlink(output_parquet, force = TRUE)
-  unlink(batch_output_dir, recursive = TRUE, force = TRUE)
+  unlink(output_parquet, recursive = TRUE, force = TRUE)
+  # Simulate a file left at output_path by an earlier unbatched run; the
+  # batched run must replace it with a directory.
+  writeLines("stale unbatched output", output_parquet)
   on.exit(unlink(uni_hive_dir, recursive = TRUE, force = TRUE), add = TRUE)
   on.exit(unlink(output_parquet, force = TRUE), add = TRUE)
   on.exit(unlink(batch_output_dir, recursive = TRUE, force = TRUE), add = TRUE)

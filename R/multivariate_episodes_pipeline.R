@@ -48,7 +48,9 @@ multivariate_episodes_pipeline <- function(
     stop("output_path must be provided and non-empty.")
   }
 
-  if (dir.exists(output_path)) {
+  # Clear whatever a previous run left at output_path (file or directory), so
+  # switching between unbatched (file) and batched (directory) runs works.
+  if (file.exists(output_path)) {
     unlink(output_path, recursive = TRUE, force = TRUE)
   }
 
