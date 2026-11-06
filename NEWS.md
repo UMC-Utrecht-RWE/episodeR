@@ -1,6 +1,7 @@
 # episodeR 0.0.4
 
 - Fixed bug in `multivariate_episodes_pipeline()` where batched runs always wrote to `<dirname(output_path)>/D3_MULTIVARIATE_EPISODES`, ignoring `output_path`. For batched runs `output_path` is now the output directory; a warning is logged when this differs from the previous location.
+- Fixed bug in `multivariate_episodes_pipeline()` where batched runs never created the `D3_MULTIVARIATE_EPISODES` table in DuckDB. Batched runs now build it from the batch parquet files (`union_by_name`), matching unbatched runs. The table is also dropped at the start of each run, so repeated unbatched runs on the same connection no longer append onto earlier results.
 
 # episodeR 0.0.3
 
