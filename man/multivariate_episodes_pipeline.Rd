@@ -27,7 +27,11 @@ D3_UNIVARIATE_EPISODES hive-partitioned parquet folder.}
 
 \item{sql_dir}{Directory containing multi_epi_*.sql pipeline scripts.}
 
-\item{output_path}{Full file path for the output parquet file.}
+\item{output_path}{For an unbatched run, the full file path for the output
+parquet file. For a batched run, a directory path instead, populated with
+one parquet file per batch (batch_00001.parquet, ...). Output is staged at
+"<output_path>.staging" and replaces any existing file or directory at
+output_path only after the run succeeds.}
 
 \item{person_ids}{Optional vector of person_ids. If NULL, derived from
 distinct person_ids in the univariate episodes input.}
@@ -45,8 +49,11 @@ the target data type for each variable (e.g. BOOL, NUM, INT, CHAR, DATE).
 Defaults to "data_type". Set to NULL to skip type conversion.}
 }
 \value{
-Invisibly returns NULL; writes D3_MULTIVARIATE_EPISODES parquet
-to output_path.
+Invisibly returns NULL. For an unbatched run, writes a single
+D3_MULTIVARIATE_EPISODES parquet file to output_path. For a batched run,
+writes one parquet file per batch into the output_path directory. In both
+cases the combined result is also left in the D3_MULTIVARIATE_EPISODES
+table on con.
 }
 \description{
 Processes D3_UNIVARIATE_EPISODES hive-partitioned parquet into a wide

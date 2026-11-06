@@ -11,7 +11,11 @@
 ##' @param d3_univariate_episodes_path Directory path to the
 ##' D3_UNIVARIATE_EPISODES hive-partitioned parquet folder.
 ##' @param sql_dir Directory containing multi_epi_*.sql pipeline scripts.
-##' @param output_path Full file path for the output parquet file.
+##' @param output_path For an unbatched run, the full file path for the output
+##' parquet file. For a batched run, a directory path instead, populated with
+##' one parquet file per batch (batch_00001.parquet, ...). Output is staged at
+##' "<output_path>.staging" and replaces any existing file or directory at
+##' output_path only after the run succeeds.
 ##' @param person_ids Optional vector of person_ids. If NULL, derived from
 ##' distinct person_ids in the univariate episodes input.
 ##' @param batch_size Maximum number of persons per batch. Cohorts larger than
@@ -24,8 +28,11 @@
 ##' the target data type for each variable (e.g. BOOL, NUM, INT, CHAR, DATE).
 ##' Defaults to "data_type". Set to NULL to skip type conversion.
 ##'
-##' @return Invisibly returns NULL; writes D3_MULTIVARIATE_EPISODES parquet
-##' to output_path.
+##' @return Invisibly returns NULL. For an unbatched run, writes a single
+##' D3_MULTIVARIATE_EPISODES parquet file to output_path. For a batched run,
+##' writes one parquet file per batch into the output_path directory. In both
+##' cases the combined result is also left in the D3_MULTIVARIATE_EPISODES
+##' table on con.
 #'
 #' @import data.table
 #' @export
@@ -43,12 +50,8 @@ multivariate_episodes_pipeline <- function(
   if (missing(output_path) || !nzchar(output_path)) {
     stop("output_path must be provided and non-empty.")
   }
-
-  if (dir.exists(output_path)) {
-    unlink(output_path, recursive = TRUE, force = TRUE)
-  }
-
-  dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+  # Drop trailing separators so the staging path lands beside output_path
+  output_path <- sub("[/\\\\]+$", "", output_path)
 
   if (!(batch_column %in% names(study_variables))) {
     stop(sprintf(
@@ -93,6 +96,14 @@ multivariate_episodes_pipeline <- function(
   }
   use_batch[is.na(use_batch)] <- FALSE
   do_batch <- any(use_batch)
+
+  # Write the new output to a sibling staging path and only swap it in for
+  # output_path once processing has succeeded, so a failed run leaves any
+  # previous result untouched.
+  dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+  staging_path <- paste0(output_path, ".staging")
+  unlink(staging_path, recursive = TRUE, force = TRUE)
+  on.exit(unlink(staging_path, recursive = TRUE, force = TRUE), add = TRUE)
 
   # Build date dimension from full univariate episodes range
   DBI::dbExecute(
@@ -139,6 +150,29 @@ multivariate_episodes_pipeline <- function(
     message("person_ids derived from D3_UNIVARIATE_EPISODES")
   }
 
+  # The variable columns an unbatched run would produce: every requested
+  # variable_id with at least one episode among person_ids. Each batch is
+  # widened to this shared schema so batches only covering some variables
+  # match the unbatched output.
+  DBI::dbWriteTable(
+    con,
+    "i_all_persons",
+    data.frame(person_id = person_ids, stringsAsFactors = FALSE),
+    overwrite = TRUE
+  )
+  all_variable_cols <- DBI::dbGetQuery(
+    con,
+    sprintf(
+      "SELECT DISTINCT episodes.variable_id
+       FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE) episodes
+       INNER JOIN i_all_persons iap ON episodes.person_id = iap.person_id
+       INNER JOIN list_sv lsv ON episodes.variable_id = lsv.variable_id",
+      d3_univariate_episodes_path
+    )
+  )$variable_id
+  all_variable_cols <- sort(as.character(all_variable_cols), method = "radix")
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS i_all_persons")
+
   run_batch <- function(ids_subset) {
     DBI::dbWriteTable(
       con,
@@ -173,11 +207,28 @@ multivariate_episodes_pipeline <- function(
       on = .(combination = int_var_id),
       nomatch = 0
     ]
+    value_template <- i_status_boolmat$value[0]
     i_status_boolmat <- data.table::dcast(
       i_status_boolmat,
       person_id + start_episode + end_episode ~ variable_id,
       value.var = "value",
       fill = FALSE
+    )
+
+    # Add variables with no episodes in this batch, filled the way dcast
+    # fills absent cells (FALSE coerced to the value column's type), so the
+    # data type conversion below treats them exactly as in an unbatched run
+    missing_cols <- setdiff(all_variable_cols, names(i_status_boolmat))
+    if (length(missing_cols) > 0) {
+      fill_value <- value_template
+      fill_value[1] <- FALSE
+      for (col in missing_cols) {
+        data.table::set(i_status_boolmat, j = col, value = fill_value)
+      }
+    }
+    data.table::setcolorder(
+      i_status_boolmat,
+      c("person_id", "start_episode", "end_episode", all_variable_cols)
     )
 
     # Convert variable columns to declared data types
@@ -230,12 +281,21 @@ multivariate_episodes_pipeline <- function(
   logger::log_info(paste("Number of batches:", length(batch_starts)))
 
   if (is_batched_run) {
-    batch_output_dir <- file.path(dirname(output_path), "D3_MULTIVARIATE_EPISODES")
-    if (dir.exists(batch_output_dir)) {
-      unlink(batch_output_dir, recursive = TRUE, force = TRUE)
+    # For a batched run, output_path IS the output directory itself - each
+    # batch is written as its own parquet file inside it (staged first).
+    batch_output_dir <- staging_path
+    if (basename(output_path) != "D3_MULTIVARIATE_EPISODES") {
+      logger::log_warn(
+        "Batched run: batch files are written to output_path ({output_path}), ",
+        "not to <dirname(output_path)>/D3_MULTIVARIATE_EPISODES as in versions <= 0.0.3."
+      )
     }
     dir.create(batch_output_dir, recursive = TRUE, showWarnings = FALSE)
   }
+
+  # Start from an empty table so repeated runs on the same connection don't
+  # append onto a previous run's rows.
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS D3_MULTIVARIATE_EPISODES")
 
   # Attach each batch into a single table, then write it once
   for (i_batch in seq_along(batch_starts)) {
@@ -292,7 +352,19 @@ multivariate_episodes_pipeline <- function(
 
   logger::log_info("Batch processing complete")
 
-  if (!is_batched_run) {
+  if (is_batched_run) {
+    # Mirror the unbatched run by also exposing the result as a DuckDB table.
+    # Batches share one variable schema; union_by_name just guards the order.
+    batch_output_dir_sql <- gsub("'", "''", batch_output_dir, fixed = TRUE)
+    DBI::dbExecute(
+      con,
+      sprintf(
+        "CREATE TABLE D3_MULTIVARIATE_EPISODES AS
+         SELECT * FROM read_parquet('%s/*.parquet', union_by_name = true)",
+        batch_output_dir_sql
+      )
+    )
+  } else {
     DBI::dbExecute(
       con,
       sprintf(
@@ -305,8 +377,17 @@ multivariate_episodes_pipeline <- function(
            FROM D3_MULTIVARIATE_EPISODES
            )
          TO '%s' (FORMAT 'parquet')",
-        output_path
+        gsub("'", "''", staging_path, fixed = TRUE)
       )
     )
   }
+
+  # Replace whatever a previous run left at output_path (file or directory),
+  # so switching between unbatched (file) and batched (directory) runs works.
+  unlink(output_path, recursive = TRUE, force = TRUE)
+  if (!file.rename(staging_path, output_path)) {
+    stop(sprintf("Failed to move staged output to output_path (%s).", output_path))
+  }
+
+  invisible(NULL)
 }
