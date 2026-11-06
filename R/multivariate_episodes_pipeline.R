@@ -50,6 +50,8 @@ multivariate_episodes_pipeline <- function(
   if (missing(output_path) || !nzchar(output_path)) {
     stop("output_path must be provided and non-empty.")
   }
+  # Drop trailing separators so the staging path lands beside output_path
+  output_path <- sub("[/\\\\]+$", "", output_path)
 
   if (!(batch_column %in% names(study_variables))) {
     stop(sprintf(
