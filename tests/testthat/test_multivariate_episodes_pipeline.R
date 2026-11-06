@@ -269,6 +269,71 @@ testthat::test_that("batched run matches unbatched run when persons have differe
   testthat::expect_setequal(names(batched_files), names(unbatched))
 })
 
+testthat::test_that("batched run with a trailing slash in output_path replaces the previous result", {
+  sql_dir <- system.file(package = "episodeR", "sql/")
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  uni_hive_dir <- file.path(tempdir(), "multi_test_uni_hive_slash")
+  batched_output <- file.path(tempdir(), "multi_test_slash_batched")
+  unlink(c(uni_hive_dir, batched_output), recursive = TRUE, force = TRUE)
+  on.exit(
+    unlink(c(uni_hive_dir, batched_output), recursive = TRUE, force = TRUE),
+    add = TRUE
+  )
+
+  uni_epi <- data.table::data.table(
+    person_id = c("P1", "P2"),
+    variable_id = c("VAR_A", "VAR_A"),
+    value = c(TRUE, FALSE),
+    start_episode = as.Date(c("2024-01-01", "2024-01-01")),
+    end_episode = as.Date(c("2024-01-31", "2024-01-31"))
+  )
+  DBI::dbWriteTable(con, "uni_epi_input", uni_epi, overwrite = TRUE)
+  dir.create(uni_hive_dir, recursive = TRUE, showWarnings = FALSE)
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "COPY uni_epi_input TO '%s' (FORMAT PARQUET, PARTITION_BY (variable_id))",
+      uni_hive_dir
+    )
+  )
+
+  sv_meta <- data.table::data.table(
+    variable_id = "VAR_A",
+    data_type = "BOOL",
+    batch = FALSE
+  )
+
+  # Simulate a previous batched result at the destination
+  dir.create(batched_output, recursive = TRUE, showWarnings = FALSE)
+  writeLines("previous result", file.path(batched_output, "batch_99999.parquet"))
+
+  # The trailing slash must not put the staging directory inside output_path,
+  # where the final cleanup would delete the new batches along with the old ones
+  multivariate_episodes_pipeline(
+    study_variables = sv_meta,
+    con = con,
+    d3_univariate_episodes_path = uni_hive_dir,
+    sql_dir = sql_dir,
+    output_path = paste0(batched_output, "/"),
+    person_ids = c("P1", "P2"),
+    batch_size = 1,
+    batch_column = "batch"
+  )
+
+  testthat::expect_setequal(
+    list.files(batched_output, all.files = TRUE, no.. = TRUE),
+    c("batch_00001.parquet", "batch_00002.parquet")
+  )
+  testthat::expect_false(file.exists(paste0(batched_output, ".staging")))
+  testthat::expect_equal(
+    nrow(DBI::dbReadTable(con, "D3_MULTIVARIATE_EPISODES")),
+    2L
+  )
+})
+
 testthat::test_that("multivariate_episodes_pipeline errors when batch column is missing", {
   # uni_data_dir <- config_test$univariate_episodes$data_dir
   uni_data_dir <- testthat::test_path("data", "univariate_episodes")
