@@ -2,6 +2,8 @@
 
 - Fixed bug in `multivariate_episodes_pipeline()` where batched runs always wrote to `<dirname(output_path)>/D3_MULTIVARIATE_EPISODES`, ignoring `output_path`. For batched runs `output_path` is now the output directory; a warning is logged when this differs from the previous location.
 - Fixed bug in `multivariate_episodes_pipeline()` where batched runs never created the `D3_MULTIVARIATE_EPISODES` table in DuckDB. Batched runs now build it from the batch parquet files (`union_by_name`), matching unbatched runs. The table is also dropped at the start of each run, so repeated unbatched runs on the same connection no longer append onto earlier results.
+- Batched runs of `multivariate_episodes_pipeline()` now give every batch the same variable columns as an unbatched run. Variables without episodes in a batch are filled the same way `dcast(fill = FALSE)` fills them in an unbatched run, instead of being absent from that batch's parquet file (and NULL in the combined table).
+- `multivariate_episodes_pipeline()` now writes its output to `<output_path>.staging` and replaces the existing output at `output_path` only after the run succeeds. A run that fails (e.g. a missing batch column) no longer deletes the previous result.
 
 # episodeR 0.0.3
 
