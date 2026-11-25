@@ -1,6 +1,6 @@
 Package: episodeR
 Title: Encode Time-Varying Study Variables in Episodes
-Version: 0.0.3
+Version: 0.0.3.9000
 Authors@R: c(
     person("Yinan", "Mao", email = "y.mao@umcutrecht.nl", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-1293-4826")), 
     person("Wijnand", "Laan", email = "w.laan@umcutrecht.nl", role = c("aut"), comment = c(ORCID = "0000-0002-2138-4539")),

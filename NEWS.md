@@ -1,3 +1,7 @@
+# episodeR (development version)
+
+- Added tag 0.0.3.9000 for use in projects.
+
 # episodeR 0.0.3
 
 - This version is to be used to provide a stable release where the package versions in DESCRIPTION and release will match
