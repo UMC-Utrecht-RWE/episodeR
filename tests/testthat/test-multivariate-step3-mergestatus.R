@@ -14,11 +14,15 @@
 
 test_that("contiguous (adjacent, no gap) same-dic_index episodes merge into one", {
   con <- new_test_con()
-  seed_episode_coded(con, data.frame(
-    person_id = "P1", dic_index = 1L,
-    start_episode = as.Date(c("2024-01-01", "2024-01-11")),
-    end_episode = as.Date(c("2024-01-10", "2024-01-20"))
-  ))
+  seed_episode_coded(
+    con,
+    data.frame(
+      person_id = "P1",
+      dic_index = 1L,
+      start_episode = as.Date(c("2024-01-01", "2024-01-11")),
+      end_episode = as.Date(c("2024-01-10", "2024-01-20"))
+    )
+  )
   out <- run_mergestatus_sql(con)
 
   expect_equal(nrow(out), 1)
@@ -28,11 +32,15 @@ test_that("contiguous (adjacent, no gap) same-dic_index episodes merge into one"
 
 test_that("overlapping same-dic_index episodes merge into one covering the union", {
   con <- new_test_con()
-  seed_episode_coded(con, data.frame(
-    person_id = "P1", dic_index = 1L,
-    start_episode = as.Date(c("2024-01-01", "2024-01-10")),
-    end_episode = as.Date(c("2024-01-15", "2024-01-25"))
-  ))
+  seed_episode_coded(
+    con,
+    data.frame(
+      person_id = "P1",
+      dic_index = 1L,
+      start_episode = as.Date(c("2024-01-01", "2024-01-10")),
+      end_episode = as.Date(c("2024-01-15", "2024-01-25"))
+    )
+  )
   out <- run_mergestatus_sql(con)
 
   expect_equal(nrow(out), 1)
@@ -42,11 +50,15 @@ test_that("overlapping same-dic_index episodes merge into one covering the union
 
 test_that("adjacent episodes with DIFFERENT dic_index do not merge", {
   con <- new_test_con()
-  seed_episode_coded(con, data.frame(
-    person_id = "P1", dic_index = c(1L, 2L),
-    start_episode = as.Date(c("2024-01-01", "2024-01-11")),
-    end_episode = as.Date(c("2024-01-10", "2024-01-20"))
-  ))
+  seed_episode_coded(
+    con,
+    data.frame(
+      person_id = "P1",
+      dic_index = c(1L, 2L),
+      start_episode = as.Date(c("2024-01-01", "2024-01-11")),
+      end_episode = as.Date(c("2024-01-10", "2024-01-20"))
+    )
+  )
   out <- run_mergestatus_sql(con)
   out <- out[order(out$start_episode), ]
 
@@ -56,23 +68,31 @@ test_that("adjacent episodes with DIFFERENT dic_index do not merge", {
 
 test_that("a genuine one-day gap between same-dic_index episodes prevents merging", {
   con <- new_test_con()
-  seed_episode_coded(con, data.frame(
-    person_id = "P1", dic_index = 1L,
-    start_episode = as.Date(c("2024-01-01", "2024-01-12")),
-    end_episode = as.Date(c("2024-01-10", "2024-01-20"))
-  ))
+  seed_episode_coded(
+    con,
+    data.frame(
+      person_id = "P1",
+      dic_index = 1L,
+      start_episode = as.Date(c("2024-01-01", "2024-01-12")),
+      end_episode = as.Date(c("2024-01-10", "2024-01-20"))
+    )
+  )
   out <- run_mergestatus_sql(con)
   expect_equal(nrow(out), 2)
 })
 
 test_that("a chain of 3+ overlapping same-dic_index episodes collapses to one, regardless of input order", {
   con <- new_test_con()
-  seed_episode_coded(con, data.frame(
-    person_id = "P1", dic_index = 1L,
-    # deliberately out of chronological order, to catch ordering assumptions
-    start_episode = as.Date(c("2024-01-12", "2024-01-01", "2024-01-20")),
-    end_episode = as.Date(c("2024-01-25", "2024-01-15", "2024-01-31"))
-  ))
+  seed_episode_coded(
+    con,
+    data.frame(
+      person_id = "P1",
+      dic_index = 1L,
+      # deliberately out of chronological order, to catch ordering assumptions
+      start_episode = as.Date(c("2024-01-12", "2024-01-01", "2024-01-20")),
+      end_episode = as.Date(c("2024-01-25", "2024-01-15", "2024-01-31"))
+    )
+  )
   out <- run_mergestatus_sql(con)
 
   expect_equal(nrow(out), 1)
@@ -82,23 +102,30 @@ test_that("a chain of 3+ overlapping same-dic_index episodes collapses to one, r
 
 test_that("chain-merge does not cross person or dic_index boundaries", {
   con <- new_test_con()
-  seed_episode_coded(con, data.frame(
-    person_id = c("P1", "P1", "P2"),
-    dic_index = c(1L, 2L, 1L),
-    start_episode = as.Date(rep("2024-01-01", 3)),
-    end_episode = as.Date(rep("2024-01-10", 3))
-  ))
+  seed_episode_coded(
+    con,
+    data.frame(
+      person_id = c("P1", "P1", "P2"),
+      dic_index = c(1L, 2L, 1L),
+      start_episode = as.Date(rep("2024-01-01", 3)),
+      end_episode = as.Date(rep("2024-01-10", 3))
+    )
+  )
   out <- run_mergestatus_sql(con)
   expect_equal(nrow(out), 3)
 })
 
 test_that("a recurring identical dic_index separated by a different one in between stays as two episodes", {
   con <- new_test_con()
-  seed_episode_coded(con, data.frame(
-    person_id = "P1", dic_index = c(1L, 2L, 1L),
-    start_episode = as.Date(c("2024-01-01", "2024-01-11", "2024-01-21")),
-    end_episode = as.Date(c("2024-01-10", "2024-01-20", "2024-01-31"))
-  ))
+  seed_episode_coded(
+    con,
+    data.frame(
+      person_id = "P1",
+      dic_index = c(1L, 2L, 1L),
+      start_episode = as.Date(c("2024-01-01", "2024-01-11", "2024-01-21")),
+      end_episode = as.Date(c("2024-01-10", "2024-01-20", "2024-01-31"))
+    )
+  )
   out <- run_mergestatus_sql(con)
   out <- out[order(out$start_episode), ]
 
@@ -110,51 +137,113 @@ test_that("10 persons with many dic_index values all merge/split correctly in on
   # What each person (P1..P10) tests is explained where it's checked,
   # below the SQL call - one comment per person, next to its assertions.
   con <- new_test_con()
-  seed_episode_coded(con, data.frame(
-    person_id = c(
-      "P1", "P1", "P1", "P2", "P2",
-      "P3", "P4", "P4", "P5", "P5",
-      "P6", "P6", "P7", "P7", "P8", "P8", "P8",
-      "P9", "P10", "P10", "P10"
-    ),
-    dic_index = c(
-      1L, 1L, 2L, 3L, 3L,
-      1L, 2L, 4L, 5L, 5L,
-      6L, 6L, 7L, 7L, 8L, 8L, 8L,
-      9L, 10L, 10L, 11L
-    ),
-    start_episode = as.Date(c(
-      "2024-01-01", "2024-01-06", "2024-01-11",
-      "2024-01-01", "2024-01-05",
-      "2024-01-01",
-      "2024-01-01", "2024-01-15",
-      "2024-01-01", "2024-01-02",
-      "2024-01-01", "2024-01-10",
-      "2024-01-01", "2024-01-12",
-      "2024-01-12", "2024-01-01", "2024-01-20",
-      "2024-02-01",
-      "2024-01-01", "2024-01-06", "2024-01-15"
-    )),
-    end_episode = as.Date(c(
-      "2024-01-05", "2024-01-10", "2024-01-20",
-      "2024-01-04", "2024-01-09",
-      "2024-01-31",
-      "2024-01-14", "2024-01-25",
-      "2024-01-01", "2024-01-03",
-      "2024-01-15", "2024-01-25",
-      "2024-01-10", "2024-01-20",
-      "2024-01-25", "2024-01-15", "2024-01-31",
-      "2024-02-05",
-      "2024-01-05", "2024-01-10", "2024-01-20"
-    ))
-  ))
+  seed_episode_coded(
+    con,
+    data.frame(
+      person_id = c(
+        "P1",
+        "P1",
+        "P1",
+        "P2",
+        "P2",
+        "P3",
+        "P4",
+        "P4",
+        "P5",
+        "P5",
+        "P6",
+        "P6",
+        "P7",
+        "P7",
+        "P8",
+        "P8",
+        "P8",
+        "P9",
+        "P10",
+        "P10",
+        "P10"
+      ),
+      dic_index = c(
+        1L,
+        1L,
+        2L,
+        3L,
+        3L,
+        1L,
+        2L,
+        4L,
+        5L,
+        5L,
+        6L,
+        6L,
+        7L,
+        7L,
+        8L,
+        8L,
+        8L,
+        9L,
+        10L,
+        10L,
+        11L
+      ),
+      start_episode = as.Date(c(
+        "2024-01-01",
+        "2024-01-06",
+        "2024-01-11",
+        "2024-01-01",
+        "2024-01-05",
+        "2024-01-01",
+        "2024-01-01",
+        "2024-01-15",
+        "2024-01-01",
+        "2024-01-02",
+        "2024-01-01",
+        "2024-01-10",
+        "2024-01-01",
+        "2024-01-12",
+        "2024-01-12",
+        "2024-01-01",
+        "2024-01-20",
+        "2024-02-01",
+        "2024-01-01",
+        "2024-01-06",
+        "2024-01-15"
+      )),
+      end_episode = as.Date(c(
+        "2024-01-05",
+        "2024-01-10",
+        "2024-01-20",
+        "2024-01-04",
+        "2024-01-09",
+        "2024-01-31",
+        "2024-01-14",
+        "2024-01-25",
+        "2024-01-01",
+        "2024-01-03",
+        "2024-01-15",
+        "2024-01-25",
+        "2024-01-10",
+        "2024-01-20",
+        "2024-01-25",
+        "2024-01-15",
+        "2024-01-31",
+        "2024-02-05",
+        "2024-01-05",
+        "2024-01-10",
+        "2024-01-20"
+      ))
+    )
+  )
   out <- run_mergestatus_sql(con)
   out <- out[order(out$person_id, out$start_episode), ]
 
   # P1: [1-5]+[6-10] same dic_index 1 -> merge to 1-10; then dic_index 2 stays separate.
   p1 <- out[out$person_id == "P1", ]
   expect_equal(nrow(p1), 2)
-  expect_equal(as.Date(p1$start_episode), as.Date(c("2024-01-01", "2024-01-11")))
+  expect_equal(
+    as.Date(p1$start_episode),
+    as.Date(c("2024-01-01", "2024-01-11"))
+  )
   expect_equal(as.Date(p1$end_episode), as.Date(c("2024-01-10", "2024-01-20")))
 
   # P2: [1-4]+[5-9] same dic_index 3, adjacent -> merge to 1-9.
@@ -202,7 +291,10 @@ test_that("10 persons with many dic_index values all merge/split correctly in on
   p10 <- out[out$person_id == "P10", ]
   expect_equal(nrow(p10), 2)
   expect_equal(p10$dic_index, c(10L, 11L))
-  expect_equal(as.Date(p10$start_episode), as.Date(c("2024-01-01", "2024-01-15")))
+  expect_equal(
+    as.Date(p10$start_episode),
+    as.Date(c("2024-01-01", "2024-01-15"))
+  )
   expect_equal(as.Date(p10$end_episode), as.Date(c("2024-01-10", "2024-01-20")))
 
   expect_setequal(unique(out$person_id), paste0("P", 1:10))

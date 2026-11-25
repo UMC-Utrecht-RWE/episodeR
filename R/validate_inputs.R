@@ -47,10 +47,13 @@ validate_batch_size <- function(batch_size) {
 validate_required_columns <- function(study_variables, required) {
   missing_cols <- setdiff(required, names(study_variables))
   if (length(missing_cols) > 0) {
-    stop(sprintf(
-      "study_variables must include column(s): %s.",
-      paste(missing_cols, collapse = ", ")
-    ), call. = FALSE)
+    stop(
+      sprintf(
+        "study_variables must include column(s): %s.",
+        paste(missing_cols, collapse = ", ")
+      ),
+      call. = FALSE
+    )
   }
   invisible(TRUE)
 }
@@ -66,10 +69,13 @@ validate_required_columns <- function(study_variables, required) {
 ##' @noRd
 validate_batch_column <- function(study_variables, batch_column) {
   if (!(batch_column %in% names(study_variables))) {
-    stop(sprintf(
-      "study_variables must include a Boolean '%s' column to control batching per variable.",
-      batch_column
-    ), call. = FALSE)
+    stop(
+      sprintf(
+        "study_variables must include a Boolean '%s' column to control batching per variable.",
+        batch_column
+      ),
+      call. = FALSE
+    )
   }
 
   batch_values <- study_variables[[batch_column]]
@@ -81,10 +87,13 @@ validate_batch_column <- function(study_variables, batch_column) {
     invalid_batch_values <- !(normalized %in%
       c("true", "t", "1", "yes", "y", "false", "f", "0", "no", "n", "", "na"))
     if (any(invalid_batch_values, na.rm = TRUE)) {
-      stop(sprintf(
-        "Column '%s' must contain only Boolean-like values (TRUE/FALSE, 1/0, yes/no).",
-        batch_column
-      ), call. = FALSE)
+      stop(
+        sprintf(
+          "Column '%s' must contain only Boolean-like values (TRUE/FALSE, 1/0, yes/no).",
+          batch_column
+        ),
+        call. = FALSE
+      )
     }
   }
   use_batch[is.na(use_batch)] <- FALSE

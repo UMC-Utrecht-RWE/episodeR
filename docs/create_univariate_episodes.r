@@ -44,12 +44,18 @@ picard::audit_start(
 
 # Load study variables metadata ---
 logger::log_info("Loading study variables metadata from BRIDGE.")
-sv_meta <- data.table::fread(file.path(config_pipeline$common$dir_bridge, "study_variables.csv"))
+sv_meta <- data.table::fread(file.path(
+  config_pipeline$common$dir_bridge,
+  "study_variables.csv"
+))
 
 # Filter to eligibility == TRUE ---
 logger::log_info("Filtering study variables to eligibility == TRUE.")
 sv_meta <- sv_meta[eligibility == TRUE]
-logger::log_info(paste0("Number of study variables with eligibility = TRUE: ", nrow(sv_meta)))
+logger::log_info(paste0(
+  "Number of study variables with eligibility = TRUE: ",
+  nrow(sv_meta)
+))
 
 # Preprocess look-back columns (convert to non-negative integer) ---
 sv_meta[, start_look_back := abs(as.integer(start_look_back))]
@@ -73,13 +79,16 @@ con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
 # D3_CONCEPTS: read only required concept_id partitions from hive-partitioned parquet folder
 concept_ids <- unique(sv_meta$concept_id)
 concept_id_filter <- paste(sprintf("'%s'", concept_ids), collapse = ", ")
-DBI::dbExecute(con, sprintf(
-  "CREATE OR REPLACE VIEW D3_CONCEPTS AS
+DBI::dbExecute(
+  con,
+  sprintf(
+    "CREATE OR REPLACE VIEW D3_CONCEPTS AS
    SELECT * FROM read_parquet('%s/**/*.parquet', hive_partitioning = TRUE, union_by_name = TRUE)
    WHERE concept_id IN (%s)",
-  file.path(dir_d3, uv_config$d3_concepts),
-  concept_id_filter
-))
+    file.path(dir_d3, uv_config$d3_concepts),
+    concept_id_filter
+  )
+)
 
 # Resolve SQL directory from episodeR package ---
 sql_dir <- system.file("sql", package = "episodeR")

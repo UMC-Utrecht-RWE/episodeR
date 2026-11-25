@@ -13,16 +13,23 @@
 test_that("a single concept record becomes one episode spanning its look-back window", {
   con <- new_test_con()
   concepts <- data.frame(
-    person_id = "P1", concept_id = "C1", date = "2024-01-10", value = "A"
+    person_id = "P1",
+    concept_id = "C1",
+    date = "2024-01-10",
+    value = "A"
   )
   sv <- sv_row("C1", "VAR1", start_look_back = 30, end_look_back = 0)
   seed_inputs(con, concepts, sv, persons = "P1")
 
-  run_step(con, "uni_epi_1_generate_initial_spells.sql", list(
-    concept_id_list = "'C1'",
-    start_study_date = "'2024-01-01'",
-    end_study_date = "'2024-03-01'"
-  ))
+  run_step(
+    con,
+    "uni_epi_1_generate_initial_spells.sql",
+    list(
+      concept_id_list = "'C1'",
+      start_study_date = "'2024-01-01'",
+      end_study_date = "'2024-03-01'"
+    )
+  )
 
   out <- DBI::dbGetQuery(con, "SELECT * FROM episodes_raw")
   expect_equal(nrow(out), 1)
@@ -34,17 +41,23 @@ test_that("a single concept record becomes one episode spanning its look-back wi
 test_that("two same-day records with different values collapse to a single 'unknown' record", {
   con <- new_test_con()
   concepts <- data.frame(
-    person_id = "P1", concept_id = "C1", date = "2024-01-05",
+    person_id = "P1",
+    concept_id = "C1",
+    date = "2024-01-05",
     value = c("A", "B")
   )
   sv <- sv_row("C1", "VAR1", start_look_back = 5, end_look_back = 0)
   seed_inputs(con, concepts, sv, persons = "P1")
 
-  run_step(con, "uni_epi_1_generate_initial_spells.sql", list(
-    concept_id_list = "'C1'",
-    start_study_date = "'2024-01-01'",
-    end_study_date = "'2024-01-31'"
-  ))
+  run_step(
+    con,
+    "uni_epi_1_generate_initial_spells.sql",
+    list(
+      concept_id_list = "'C1'",
+      start_study_date = "'2024-01-01'",
+      end_study_date = "'2024-01-31'"
+    )
+  )
 
   dedup <- DBI::dbGetQuery(con, "SELECT * FROM concept_dedup")
   expect_equal(nrow(dedup), 1)
@@ -54,17 +67,23 @@ test_that("two same-day records with different values collapse to a single 'unkn
 test_that("two same-day records with the SAME value dedup cleanly (no 'unknown')", {
   con <- new_test_con()
   concepts <- data.frame(
-    person_id = "P1", concept_id = "C1", date = "2024-01-05",
+    person_id = "P1",
+    concept_id = "C1",
+    date = "2024-01-05",
     value = c("A", "A")
   )
   sv <- sv_row("C1", "VAR1", start_look_back = 5, end_look_back = 0)
   seed_inputs(con, concepts, sv, persons = "P1")
 
-  run_step(con, "uni_epi_1_generate_initial_spells.sql", list(
-    concept_id_list = "'C1'",
-    start_study_date = "'2024-01-01'",
-    end_study_date = "'2024-01-31'"
-  ))
+  run_step(
+    con,
+    "uni_epi_1_generate_initial_spells.sql",
+    list(
+      concept_id_list = "'C1'",
+      start_study_date = "'2024-01-01'",
+      end_study_date = "'2024-01-31'"
+    )
+  )
 
   dedup <- DBI::dbGetQuery(con, "SELECT * FROM concept_dedup")
   expect_equal(nrow(dedup), 1)
@@ -74,20 +93,28 @@ test_that("two same-day records with the SAME value dedup cleanly (no 'unknown')
 test_that("a later record's episode crops the end of the preceding overlapping episode (MRR resolution)", {
   con <- new_test_con()
   concepts <- data.frame(
-    person_id = "P1", concept_id = "C1",
+    person_id = "P1",
+    concept_id = "C1",
     date = c("2024-01-01", "2024-01-10"),
     value = c("A", "B")
   )
   sv <- sv_row("C1", "VAR1", start_look_back = 30, end_look_back = 0)
   seed_inputs(con, concepts, sv, persons = "P1")
 
-  run_step(con, "uni_epi_1_generate_initial_spells.sql", list(
-    concept_id_list = "'C1'",
-    start_study_date = "'2024-01-01'",
-    end_study_date = "'2024-03-01'"
-  ))
+  run_step(
+    con,
+    "uni_epi_1_generate_initial_spells.sql",
+    list(
+      concept_id_list = "'C1'",
+      start_study_date = "'2024-01-01'",
+      end_study_date = "'2024-03-01'"
+    )
+  )
 
-  out <- DBI::dbGetQuery(con, "SELECT * FROM episodes_raw ORDER BY start_episode")
+  out <- DBI::dbGetQuery(
+    con,
+    "SELECT * FROM episodes_raw ORDER BY start_episode"
+  )
   expect_equal(nrow(out), 2)
   expect_equal(out$value, c("A", "B"))
   # A's window would naturally run to 2024-01-31, but B starts 2024-01-10,
@@ -100,16 +127,23 @@ test_that("a later record's episode crops the end of the preceding overlapping e
 test_that("a record whose window falls entirely before the study period is dropped from trimmed_episodes", {
   con <- new_test_con()
   concepts <- data.frame(
-    person_id = "P1", concept_id = "C1", date = "2023-01-01", value = "A"
+    person_id = "P1",
+    concept_id = "C1",
+    date = "2023-01-01",
+    value = "A"
   )
   sv <- sv_row("C1", "VAR1", start_look_back = 5, end_look_back = 0)
   seed_inputs(con, concepts, sv, persons = "P1")
 
-  run_step(con, "uni_epi_1_generate_initial_spells.sql", list(
-    concept_id_list = "'C1'",
-    start_study_date = "'2024-01-01'",
-    end_study_date = "'2024-01-31'"
-  ))
+  run_step(
+    con,
+    "uni_epi_1_generate_initial_spells.sql",
+    list(
+      concept_id_list = "'C1'",
+      start_study_date = "'2024-01-01'",
+      end_study_date = "'2024-01-31'"
+    )
+  )
 
   out <- DBI::dbGetQuery(con, "SELECT * FROM trimmed_episodes")
   expect_equal(nrow(out), 0)
@@ -118,16 +152,23 @@ test_that("a record whose window falls entirely before the study period is dropp
 test_that("a record whose window straddles the study start is clamped, not dropped", {
   con <- new_test_con()
   concepts <- data.frame(
-    person_id = "P1", concept_id = "C1", date = "2023-12-30", value = "A"
+    person_id = "P1",
+    concept_id = "C1",
+    date = "2023-12-30",
+    value = "A"
   )
   sv <- sv_row("C1", "VAR1", start_look_back = 5, end_look_back = 0)
   seed_inputs(con, concepts, sv, persons = "P1")
 
-  run_step(con, "uni_epi_1_generate_initial_spells.sql", list(
-    concept_id_list = "'C1'",
-    start_study_date = "'2024-01-01'",
-    end_study_date = "'2024-01-31'"
-  ))
+  run_step(
+    con,
+    "uni_epi_1_generate_initial_spells.sql",
+    list(
+      concept_id_list = "'C1'",
+      start_study_date = "'2024-01-01'",
+      end_study_date = "'2024-01-31'"
+    )
+  )
 
   out <- DBI::dbGetQuery(con, "SELECT * FROM trimmed_episodes")
   expect_equal(nrow(out), 1)
@@ -142,18 +183,23 @@ test_that("chain-merge in step 1 collapses overlapping same-value trimmed episod
   # already appear as one merged row in episodes_raw.
   con <- new_test_con()
   concepts <- data.frame(
-    person_id = "P1", concept_id = "C1",
+    person_id = "P1",
+    concept_id = "C1",
     date = c("2024-01-01", "2024-01-05"),
     value = c("A", "A")
   )
   sv <- sv_row("C1", "VAR1", start_look_back = 10, end_look_back = 0)
   seed_inputs(con, concepts, sv, persons = "P1")
 
-  run_step(con, "uni_epi_1_generate_initial_spells.sql", list(
-    concept_id_list = "'C1'",
-    start_study_date = "'2024-01-01'",
-    end_study_date = "'2024-01-31'"
-  ))
+  run_step(
+    con,
+    "uni_epi_1_generate_initial_spells.sql",
+    list(
+      concept_id_list = "'C1'",
+      start_study_date = "'2024-01-01'",
+      end_study_date = "'2024-01-31'"
+    )
+  )
 
   out <- DBI::dbGetQuery(con, "SELECT * FROM episodes_raw")
   expect_equal(nrow(out), 1)
@@ -173,11 +219,15 @@ test_that("different persons and different variables never mix in dedup or MRR r
   sv <- sv_row("C1", "VAR1", start_look_back = 5, end_look_back = 0)
   seed_inputs(con, concepts, sv, persons = c("P1", "P2"))
 
-  run_step(con, "uni_epi_1_generate_initial_spells.sql", list(
-    concept_id_list = "'C1'",
-    start_study_date = "'2024-01-01'",
-    end_study_date = "'2024-01-31'"
-  ))
+  run_step(
+    con,
+    "uni_epi_1_generate_initial_spells.sql",
+    list(
+      concept_id_list = "'C1'",
+      start_study_date = "'2024-01-01'",
+      end_study_date = "'2024-01-31'"
+    )
+  )
 
   out <- DBI::dbGetQuery(con, "SELECT * FROM episodes_raw ORDER BY person_id")
   expect_equal(nrow(out), 2)
@@ -195,26 +245,81 @@ test_that("10 persons exercise dedup, MRR cropping, drop/clamp, chain-merge, and
   con <- new_test_con()
   concepts <- rbind(
     # P1: single record -> one 11-day episode.
-    data.frame(person_id = "P1", concept_id = "C1", date = "2024-01-10", value = "A"),
+    data.frame(
+      person_id = "P1",
+      concept_id = "C1",
+      date = "2024-01-10",
+      value = "A"
+    ),
     # P2: same-day different values -> dedup collapses to 'unknown'.
-    data.frame(person_id = "P2", concept_id = "C1", date = c("2024-01-05", "2024-01-05"), value = c("A", "B")),
+    data.frame(
+      person_id = "P2",
+      concept_id = "C1",
+      date = c("2024-01-05", "2024-01-05"),
+      value = c("A", "B")
+    ),
     # P3: same-day identical values -> clean dedup, no 'unknown'.
-    data.frame(person_id = "P3", concept_id = "C1", date = c("2024-01-05", "2024-01-05"), value = c("A", "A")),
+    data.frame(
+      person_id = "P3",
+      concept_id = "C1",
+      date = c("2024-01-05", "2024-01-05"),
+      value = c("A", "A")
+    ),
     # P4: later record crops the earlier one's end (MRR resolution).
-    data.frame(person_id = "P4", concept_id = "C1", date = c("2024-01-01", "2024-01-05"), value = c("A", "B")),
+    data.frame(
+      person_id = "P4",
+      concept_id = "C1",
+      date = c("2024-01-01", "2024-01-05"),
+      value = c("A", "B")
+    ),
     # P5: window entirely before the study period -> dropped, 0 rows.
-    data.frame(person_id = "P5", concept_id = "C1", date = "2023-01-01", value = "A"),
+    data.frame(
+      person_id = "P5",
+      concept_id = "C1",
+      date = "2023-01-01",
+      value = "A"
+    ),
     # P6: window straddles study start -> clamped, not dropped.
-    data.frame(person_id = "P6", concept_id = "C1", date = "2023-12-28", value = "A"),
+    data.frame(
+      person_id = "P6",
+      concept_id = "C1",
+      date = "2023-12-28",
+      value = "A"
+    ),
     # P7: overlapping same-value records chain-merge into one episode.
-    data.frame(person_id = "P7", concept_id = "C1", date = c("2024-01-01", "2024-01-05"), value = c("A", "A")),
+    data.frame(
+      person_id = "P7",
+      concept_id = "C1",
+      date = c("2024-01-01", "2024-01-05"),
+      value = c("A", "A")
+    ),
     # P8: two different variables for the same person stay independent.
-    data.frame(person_id = "P8", concept_id = "C1", date = "2024-01-01", value = "A"),
-    data.frame(person_id = "P8", concept_id = "C2", date = "2024-01-01", value = "X"),
+    data.frame(
+      person_id = "P8",
+      concept_id = "C1",
+      date = "2024-01-01",
+      value = "A"
+    ),
+    data.frame(
+      person_id = "P8",
+      concept_id = "C2",
+      date = "2024-01-01",
+      value = "X"
+    ),
     # P9: two far-apart records, same variable/value -> no merge (gap too large).
-    data.frame(person_id = "P9", concept_id = "C1", date = c("2024-01-01", "2024-02-01"), value = c("A", "A")),
+    data.frame(
+      person_id = "P9",
+      concept_id = "C1",
+      date = c("2024-01-01", "2024-02-01"),
+      value = c("A", "A")
+    ),
     # P10: independent sanity check, distinct date/value from P1.
-    data.frame(person_id = "P10", concept_id = "C1", date = "2024-02-15", value = "Z")
+    data.frame(
+      person_id = "P10",
+      concept_id = "C1",
+      date = "2024-02-15",
+      value = "Z"
+    )
   )
   sv <- rbind(
     sv_row("C1", "VAR1", start_look_back = 10, end_look_back = 0),
@@ -223,11 +328,15 @@ test_that("10 persons exercise dedup, MRR cropping, drop/clamp, chain-merge, and
   persons <- paste0("P", 1:10)
   seed_inputs(con, concepts, sv, persons = persons)
 
-  run_step(con, "uni_epi_1_generate_initial_spells.sql", list(
-    concept_id_list = "'C1', 'C2'",
-    start_study_date = "'2024-01-01'",
-    end_study_date = "'2024-03-01'"
-  ))
+  run_step(
+    con,
+    "uni_epi_1_generate_initial_spells.sql",
+    list(
+      concept_id_list = "'C1', 'C2'",
+      start_study_date = "'2024-01-01'",
+      end_study_date = "'2024-03-01'"
+    )
+  )
 
   out <- data.table::as.data.table(DBI::dbGetQuery(
     con,
@@ -274,7 +383,10 @@ test_that("10 persons exercise dedup, MRR cropping, drop/clamp, chain-merge, and
 
   p9 <- out[person_id == "P9"]
   expect_equal(nrow(p9), 2)
-  expect_equal(as.Date(p9$start_episode), as.Date(c("2024-01-01", "2024-02-01")))
+  expect_equal(
+    as.Date(p9$start_episode),
+    as.Date(c("2024-01-01", "2024-02-01"))
+  )
 
   p10 <- out[person_id == "P10"]
   expect_equal(nrow(p10), 1)

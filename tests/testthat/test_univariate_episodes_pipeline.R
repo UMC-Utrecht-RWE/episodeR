@@ -133,7 +133,7 @@ testthat::test_that("Univariate episodes pipeline trims concept timestamps to da
     "will be deprecated"
   )
 
-# check date schema, throw error if timestamp
+  # check date schema, throw error if timestamp
   parquet_files <- list.files(
     hive_dir,
     pattern = "\\.parquet$",
@@ -143,21 +143,25 @@ testthat::test_that("Univariate episodes pipeline trims concept timestamps to da
   start_types <- vapply(
     parquet_files,
     function(path) {
-      arrow::read_parquet(path, as_data_frame = FALSE)$schema$GetFieldByName("start_episode")$type$ToString()
+      arrow::read_parquet(path, as_data_frame = FALSE)$schema$GetFieldByName(
+        "start_episode"
+      )$type$ToString()
     },
     character(1)
   )
   end_types <- vapply(
     parquet_files,
     function(path) {
-      arrow::read_parquet(path, as_data_frame = FALSE)$schema$GetFieldByName("end_episode")$type$ToString()
+      arrow::read_parquet(path, as_data_frame = FALSE)$schema$GetFieldByName(
+        "end_episode"
+      )$type$ToString()
     },
     character(1)
   )
   testthat::expect_true(all(start_types == "date32[day]"))
   testthat::expect_true(all(end_types == "date32[day]"))
 
-# check values match expected
+  # check values match expected
   actual <- data.table::as.data.table(
     DBI::dbGetQuery(
       con,

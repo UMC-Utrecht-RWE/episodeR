@@ -13,11 +13,14 @@
 
 test_that("a single active variable produces one episode spanning its full date range", {
   con <- new_test_con()
-  seed_exploded(con, list(
-    c("p1", 1L, "2024-01-01"),
-    c("p1", 1L, "2024-01-02"),
-    c("p1", 1L, "2024-01-03")
-  ))
+  seed_exploded(
+    con,
+    list(
+      c("p1", 1L, "2024-01-01"),
+      c("p1", 1L, "2024-01-02"),
+      c("p1", 1L, "2024-01-03")
+    )
+  )
   out <- run_combine_sql(con)
 
   expect_equal(nrow(out), 1)
@@ -28,10 +31,15 @@ test_that("a single active variable produces one episode spanning its full date 
 
 test_that("two variables active on the same days combine into one 'lo;hi' episode", {
   con <- new_test_con()
-  seed_exploded(con, list(
-    c("p1", 1L, "2024-01-01"), c("p1", 2L, "2024-01-01"),
-    c("p1", 1L, "2024-01-02"), c("p1", 2L, "2024-01-02")
-  ))
+  seed_exploded(
+    con,
+    list(
+      c("p1", 1L, "2024-01-01"),
+      c("p1", 2L, "2024-01-01"),
+      c("p1", 1L, "2024-01-02"),
+      c("p1", 2L, "2024-01-02")
+    )
+  )
   out <- run_combine_sql(con)
 
   expect_equal(nrow(out), 1)
@@ -42,35 +50,51 @@ test_that("two variables active on the same days combine into one 'lo;hi' episod
 
 test_that("a variable dropping out shrinks the combination and starts a new episode", {
   con <- new_test_con()
-  seed_exploded(con, list(
-    c("p1", 1L, "2024-01-01"), c("p1", 2L, "2024-01-01"),
-    c("p1", 1L, "2024-01-02"), c("p1", 2L, "2024-01-02"),
-    # VAR2 (int_var_id 2) drops out from 01-03 onward
-    c("p1", 1L, "2024-01-03"),
-    c("p1", 1L, "2024-01-04")
-  ))
+  seed_exploded(
+    con,
+    list(
+      c("p1", 1L, "2024-01-01"),
+      c("p1", 2L, "2024-01-01"),
+      c("p1", 1L, "2024-01-02"),
+      c("p1", 2L, "2024-01-02"),
+      # VAR2 (int_var_id 2) drops out from 01-03 onward
+      c("p1", 1L, "2024-01-03"),
+      c("p1", 1L, "2024-01-04")
+    )
+  )
   out <- run_combine_sql(con)
 
   expect_equal(nrow(out), 2)
   expect_equal(out$combination, c("1;2", "1"))
-  expect_equal(as.Date(out$start_episode), as.Date(c("2024-01-01", "2024-01-03")))
+  expect_equal(
+    as.Date(out$start_episode),
+    as.Date(c("2024-01-01", "2024-01-03"))
+  )
   expect_equal(as.Date(out$end_episode), as.Date(c("2024-01-02", "2024-01-04")))
 })
 
 test_that("a variable joining partway through starts a new episode with the widened combination", {
   con <- new_test_con()
-  seed_exploded(con, list(
-    c("p1", 1L, "2024-01-01"),
-    c("p1", 1L, "2024-01-02"),
-    # VAR2 (int_var_id 2) joins from 01-03 onward
-    c("p1", 1L, "2024-01-03"), c("p1", 2L, "2024-01-03"),
-    c("p1", 1L, "2024-01-04"), c("p1", 2L, "2024-01-04")
-  ))
+  seed_exploded(
+    con,
+    list(
+      c("p1", 1L, "2024-01-01"),
+      c("p1", 1L, "2024-01-02"),
+      # VAR2 (int_var_id 2) joins from 01-03 onward
+      c("p1", 1L, "2024-01-03"),
+      c("p1", 2L, "2024-01-03"),
+      c("p1", 1L, "2024-01-04"),
+      c("p1", 2L, "2024-01-04")
+    )
+  )
   out <- run_combine_sql(con)
 
   expect_equal(nrow(out), 2)
   expect_equal(out$combination, c("1", "1;2"))
-  expect_equal(as.Date(out$start_episode), as.Date(c("2024-01-01", "2024-01-03")))
+  expect_equal(
+    as.Date(out$start_episode),
+    as.Date(c("2024-01-01", "2024-01-03"))
+  )
   expect_equal(as.Date(out$end_episode), as.Date(c("2024-01-02", "2024-01-04")))
 })
 
@@ -80,28 +104,37 @@ test_that("a value change that keeps the same variable set still produces one st
   # 1 -> int_var_id 3, both under VAR1) is a real combination change, but here
   # we hold int_var_id fixed across all days to confirm no spurious splitting.
   con <- new_test_con()
-  seed_exploded(con, list(
-    c("p1", 1L, "2024-01-01"),
-    c("p1", 1L, "2024-01-02"),
-    c("p1", 1L, "2024-01-03"),
-    c("p1", 1L, "2024-01-04"),
-    c("p1", 1L, "2024-01-05")
-  ))
+  seed_exploded(
+    con,
+    list(
+      c("p1", 1L, "2024-01-01"),
+      c("p1", 1L, "2024-01-02"),
+      c("p1", 1L, "2024-01-03"),
+      c("p1", 1L, "2024-01-04"),
+      c("p1", 1L, "2024-01-05")
+    )
+  )
   out <- run_combine_sql(con)
   expect_equal(nrow(out), 1)
-  expect_equal(as.Date(out$end_episode) - as.Date(out$start_episode), as.difftime(4, units = "days"))
+  expect_equal(
+    as.Date(out$end_episode) - as.Date(out$start_episode),
+    as.difftime(4, units = "days")
+  )
 })
 
 test_that("a real value change (different int_var_id) splits into two episodes with no merge", {
   con <- new_test_con()
-  seed_exploded(con, list(
-    # VAR1 = A on int_var_id 1
-    c("p1", 1L, "2024-01-01"),
-    c("p1", 1L, "2024-01-02"),
-    # VAR1 = B on int_var_id 2 (a different dictionary entry)
-    c("p1", 2L, "2024-01-03"),
-    c("p1", 2L, "2024-01-04")
-  ))
+  seed_exploded(
+    con,
+    list(
+      # VAR1 = A on int_var_id 1
+      c("p1", 1L, "2024-01-01"),
+      c("p1", 1L, "2024-01-02"),
+      # VAR1 = B on int_var_id 2 (a different dictionary entry)
+      c("p1", 2L, "2024-01-03"),
+      c("p1", 2L, "2024-01-04")
+    )
+  )
   out <- run_combine_sql(con)
 
   expect_equal(nrow(out), 2)
@@ -123,10 +156,16 @@ test_that("a chain of 5+ consecutive days with an identical combination collapse
 
 test_that("different persons combine independently and never mix rows", {
   con <- new_test_con()
-  seed_exploded(con, list(
-    c("p1", 1L, "2024-01-01"), c("p1", 1L, "2024-01-02"),
-    c("p2", 2L, "2024-01-01"), c("p2", 2L, "2024-01-02"), c("p2", 2L, "2024-01-03")
-  ))
+  seed_exploded(
+    con,
+    list(
+      c("p1", 1L, "2024-01-01"),
+      c("p1", 1L, "2024-01-02"),
+      c("p2", 2L, "2024-01-01"),
+      c("p2", 2L, "2024-01-02"),
+      c("p2", 2L, "2024-01-03")
+    )
+  )
   out <- run_combine_sql(con)
 
   expect_equal(nrow(out), 2)
@@ -134,7 +173,10 @@ test_that("different persons combine independently and never mix rows", {
   p2 <- out[out$person_id == "p2", ]
   expect_equal(p1$combination, "1")
   expect_equal(p2$combination, "2")
-  expect_equal(as.Date(p2$end_episode) - as.Date(p2$start_episode), as.difftime(2, units = "days"))
+  expect_equal(
+    as.Date(p2$end_episode) - as.Date(p2$start_episode),
+    as.difftime(2, units = "days")
+  )
 })
 
 test_that("KNOWN BEHAVIOUR: a genuine coverage gap (no EXPLODED row at all) with matching combination on both sides is silently bridged into one episode", {
@@ -147,13 +189,16 @@ test_that("KNOWN BEHAVIOUR: a genuine coverage gap (no EXPLODED row at all) with
   # EXPLODED ever has a true hole for a person/day, this step will merge
   # across it rather than splitting the episode at the hole.
   con <- new_test_con()
-  seed_exploded(con, list(
-    c("p1", 1L, "2024-01-01"),
-    c("p1", 1L, "2024-01-02"),
-    # gap: no EXPLODED rows at all for 2024-01-03 / 2024-01-04
-    c("p1", 1L, "2024-01-05"),
-    c("p1", 1L, "2024-01-06")
-  ))
+  seed_exploded(
+    con,
+    list(
+      c("p1", 1L, "2024-01-01"),
+      c("p1", 1L, "2024-01-02"),
+      # gap: no EXPLODED rows at all for 2024-01-03 / 2024-01-04
+      c("p1", 1L, "2024-01-05"),
+      c("p1", 1L, "2024-01-06")
+    )
+  )
   out <- run_combine_sql(con)
 
   expect_equal(nrow(out), 1)
@@ -177,9 +222,14 @@ test_that("10 persons exercise joining/dropping variables, real value changes, l
   #'
   #' @return A list of c(person_id, int_var_id, date) rows.
   day_rows <- function(person, day_range, var_ids) {
-    unlist(lapply(day_range, function(d) {
-      lapply(sort(var_ids), function(v) c(person, v, sprintf("2024-01-%02d", d)))
-    }), recursive = FALSE)
+    unlist(
+      lapply(day_range, function(d) {
+        lapply(sort(var_ids), function(v) {
+          c(person, v, sprintf("2024-01-%02d", d))
+        })
+      }),
+      recursive = FALSE
+    )
   }
 
   rows <- c(
@@ -188,21 +238,28 @@ test_that("10 persons exercise joining/dropping variables, real value changes, l
     # p2: two variables combined throughout.
     day_rows("p2", 1:5, c(1, 2)),
     # p3: a variable drops out partway through.
-    day_rows("p3", 1:3, c(1, 2)), day_rows("p3", 4:6, 1),
+    day_rows("p3", 1:3, c(1, 2)),
+    day_rows("p3", 4:6, 1),
     # p4: a variable joins partway through.
-    day_rows("p4", 1:3, 1), day_rows("p4", 4:6, c(1, 2)),
+    day_rows("p4", 1:3, 1),
+    day_rows("p4", 4:6, c(1, 2)),
     # p5: a real value change (int_var_id 1 -> 3).
-    day_rows("p5", 1:3, 1), day_rows("p5", 4:6, 3),
+    day_rows("p5", 1:3, 1),
+    day_rows("p5", 4:6, 3),
     # p6: long 9-day chain, one combination throughout.
     day_rows("p6", 1:9, 1),
     # p7: A-B-A - a combination recurring after an interruption.
-    day_rows("p7", 1:3, 1), day_rows("p7", 4:6, 2), day_rows("p7", 7:9, 1),
+    day_rows("p7", 1:3, 1),
+    day_rows("p7", 4:6, 2),
+    day_rows("p7", 7:9, 1),
     # p8: mirrors p1's shape, independence sanity check.
     day_rows("p8", 1:5, 4),
     # p9: single day only.
     day_rows("p9", 1, 1),
     # p10: 3-segment ramp up then down.
-    day_rows("p10", 1:2, 1), day_rows("p10", 3:5, c(1, 2)), day_rows("p10", 6:7, 2)
+    day_rows("p10", 1:2, 1),
+    day_rows("p10", 3:5, c(1, 2)),
+    day_rows("p10", 6:7, 2)
   )
   seed_exploded(con, rows)
   out <- run_combine_sql(con)
@@ -224,7 +281,10 @@ test_that("10 persons exercise joining/dropping variables, real value changes, l
   p3 <- out[out$person_id == "p3", ]
   expect_equal(nrow(p3), 2)
   expect_equal(p3$combination, c("1;2", "1"))
-  expect_equal(as.Date(p3$start_episode), as.Date(c("2024-01-01", "2024-01-04")))
+  expect_equal(
+    as.Date(p3$start_episode),
+    as.Date(c("2024-01-01", "2024-01-04"))
+  )
 
   p4 <- out[out$person_id == "p4", ]
   expect_equal(p4$combination, c("1", "1;2"))

@@ -28,18 +28,18 @@
 ##' @import data.table
 apply_data_types <- function(dt, study_variables, data_type_col = "data_type") {
   type_map <- list(
-    BOOL      = as.logical,
-    BOOLEAN   = as.logical,
-    NUM       = as.numeric,
-    NUMERIC   = as.numeric,
-    DOUBLE    = as.numeric,
-    FLOAT     = as.numeric,
-    INT       = as.integer,
-    INTEGER   = as.integer,
-    CHAR      = as.character,
+    BOOL = as.logical,
+    BOOLEAN = as.logical,
+    NUM = as.numeric,
+    NUMERIC = as.numeric,
+    DOUBLE = as.numeric,
+    FLOAT = as.numeric,
+    INT = as.integer,
+    INTEGER = as.integer,
+    CHAR = as.character,
     CHARACTER = as.character,
-    STRING    = as.character,
-    DATE      = as.Date
+    STRING = as.character,
+    DATE = as.Date
   )
   sv <- as.data.frame(study_variables)
   for (var_id in intersect(sv$variable_id, names(dt))) {

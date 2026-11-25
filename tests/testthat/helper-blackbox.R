@@ -28,17 +28,26 @@ reference_combine <- function(uni_episodes) {
     p <- persons[i]
     sub <- uni_episodes[person_id == p]
     breakpoints <- sort(unique(c(sub$start_episode, sub$end_episode + 1)))
-    if (length(breakpoints) < 2) next
+    if (length(breakpoints) < 2) {
+      next
+    }
     seg_start <- breakpoints[-length(breakpoints)]
     seg_end <- breakpoints[-1] - 1
-    seg <- data.table::data.table(start_episode = seg_start, end_episode = seg_end)
+    seg <- data.table::data.table(
+      start_episode = seg_start,
+      end_episode = seg_end
+    )
 
     for (v in variables) {
       vsub <- sub[variable_id == v]
-      seg[[v]] <- vapply(seg_start, function(s) {
-        m <- vsub[start_episode <= s & end_episode >= s]
-        if (nrow(m) == 0) NA_character_ else as.character(m$value[1])
-      }, character(1))
+      seg[[v]] <- vapply(
+        seg_start,
+        function(s) {
+          m <- vsub[start_episode <= s & end_episode >= s]
+          if (nrow(m) == 0) NA_character_ else as.character(m$value[1])
+        },
+        character(1)
+      )
     }
 
     data.table::setorder(seg, start_episode)
@@ -46,18 +55,25 @@ reference_combine <- function(uni_episodes) {
     changed <- rep(TRUE, n)
     if (n > 1) {
       for (j in 2:n) {
-        same <- all(vapply(variables, function(v) {
-          a <- seg[[v]][j]
-          b <- seg[[v]][j - 1]
-          identical(a, b) || (is.na(a) && is.na(b))
-        }, logical(1)))
+        same <- all(vapply(
+          variables,
+          function(v) {
+            a <- seg[[v]][j]
+            b <- seg[[v]][j - 1]
+            identical(a, b) || (is.na(a) && is.na(b))
+          },
+          logical(1)
+        ))
         changed[j] <- !same
       }
     }
     grp <- cumsum(changed)
     merged <- seg[,
       c(
-        list(start_episode = min(start_episode), end_episode = max(end_episode)),
+        list(
+          start_episode = min(start_episode),
+          end_episode = max(end_episode)
+        ),
         lapply(.SD, `[`, 1)
       ),
       by = grp,
@@ -68,7 +84,10 @@ reference_combine <- function(uni_episodes) {
     out[[i]] <- merged
   }
   result <- data.table::rbindlist(out, use.names = TRUE)
-  data.table::setcolorder(result, c("person_id", "start_episode", "end_episode", variables))
+  data.table::setcolorder(
+    result,
+    c("person_id", "start_episode", "end_episode", variables)
+  )
   data.table::setorder(result, person_id, start_episode)
   result[]
 }
